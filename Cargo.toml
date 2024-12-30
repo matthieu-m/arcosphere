@@ -1,0 +1,23 @@
+[package]
+name = "arcosphere"
+version = "0.1.0"
+authors = ["Matthieu M. <matthieum.147192@gmail.com>"]
+edition = "2021"
+description = "A solver of arcosphere transformations for Factory: Space Exploration"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/matthieu-m/arcosphere"
+readme = "README.md"
+keywords = ["factorio", "no-std", "space-exploration"]
+categories = []
+
+[features]
+
+default = []
+
+#   Enables "rayon" feature, which makes the `RayonExecutor` available, for parallel solving, available.
+rayon = [ "dep:rayon" ]
+
+[dependencies]
+
+#   Only with "rayon" feature.
+rayon = { version = "1.0", optional = true }

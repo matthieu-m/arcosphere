@@ -5,7 +5,7 @@
 use core::{array, cmp, error, fmt, hash, iter, marker::PhantomData, ops, str};
 
 /// An arcosphere.
-pub trait Arcosphere: Copy {
+pub trait Arcosphere: Copy + fmt::Debug {
     /// The total number of arcospheres.
     ///
     /// The existing arcospheres are expected to map to indexes `0..Self::DIMENSION`.
@@ -69,6 +69,41 @@ pub enum Polarity {
     Negative,
     /// Polarity of GOTZ with the default arcospheres & recipes.
     Positive,
+}
+
+/// A recipe, either inversion or folding.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum Recipe<A>
+where
+    A: Arcosphere,
+    [(); A::DIMENSION]: Sized,
+{
+    /// A folding recipe.
+    Folding(FoldingRecipe<A>),
+    /// An inversion recipe.
+    Inversion(InversionRecipe<A>),
+}
+
+impl<A> Recipe<A>
+where
+    A: Arcosphere,
+    [(); A::DIMENSION]: Sized,
+{
+    /// Returns a copy of the input set.
+    pub fn input(&self) -> Set<A> {
+        match self {
+            Self::Folding(this) => this.input(),
+            Self::Inversion(this) => this.input(),
+        }
+    }
+
+    /// Returns a copy of the output set.
+    pub fn output(&self) -> Set<A> {
+        match self {
+            Self::Folding(this) => this.output(),
+            Self::Inversion(this) => this.output(),
+        }
+    }
 }
 
 /// A folding recipe.
@@ -420,7 +455,7 @@ where
     [(); A::DIMENSION]: Sized,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        f.debug_struct("Set").field("spheres", &self.spheres).finish()
+        write!(f, "{self}")
     }
 }
 
@@ -619,6 +654,22 @@ where
 //
 //  Set operations
 //
+
+/// Subset trait.
+pub trait IsSubsetOf {
+    /// Is `self` a subset of `other`?
+    fn is_subset_of(&self, other: &Self) -> bool;
+}
+
+impl<A> IsSubsetOf for Set<A>
+where
+    A: Arcosphere,
+    [(); A::DIMENSION]: Sized,
+{
+    fn is_subset_of(&self, other: &Self) -> bool {
+        self.is_subset_of(other)
+    }
+}
 
 impl<A> ops::AddAssign for Set<A>
 where

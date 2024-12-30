@@ -1,12 +1,20 @@
 //! Default implementation of the various traits.
 
-use crate::model::{Arcosphere, FoldingRecipe, InversionRecipe, Polarity, RecipeParseError, RecipeSet, SetParseError};
+use crate::model::{
+    Arcosphere, FoldingRecipe, InversionRecipe, Polarity, Recipe, RecipeParseError, RecipeSet, Set, SetParseError,
+};
+
+/// Recipe for Space Exploration.
+pub type SeRecipe = Recipe<SeArcosphere>;
 
 /// Inversion recipe for Space Exploration.
 pub type SeInversionRecipe = InversionRecipe<SeArcosphere>;
 
 /// Folding recipe for Space Exploration.
 pub type SeFoldingRecipe = FoldingRecipe<SeArcosphere>;
+
+/// Set of arcospheres for Space Exploration.
+pub type SeSet = Set<SeArcosphere>;
 
 /// Space Exploration set of recipes.
 #[derive(Clone, Copy, Debug)]

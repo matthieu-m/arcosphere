@@ -25,5 +25,6 @@
 #![deny(missing_docs)]
 #![allow(incomplete_features)]
 
+pub mod executor;
 pub mod model;
 pub mod space_exploration;

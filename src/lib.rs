@@ -26,3 +26,4 @@
 #![allow(incomplete_features)]
 
 pub mod model;
+pub mod space_exploration;

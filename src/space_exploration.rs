@@ -1,8 +1,6 @@
 //! Default implementation of the various traits.
 
-use crate::model::{
-    Arcosphere, FoldingRecipe, InversionRecipe, Polarity, Recipe, RecipeParseError, RecipeSet, Set, SetParseError,
-};
+use crate::model::{Arcosphere, FoldingRecipe, InversionRecipe, Polarity, Recipe, RecipeParseError, RecipeSet, Set};
 
 /// Recipe for Space Exploration.
 pub type SeRecipe = Recipe<SeArcosphere>;
@@ -157,12 +155,12 @@ impl Arcosphere for SeArcosphere {
 //
 
 impl SeRecipeSet {
-    fn create_inversions() -> Result<[SeInversionRecipe; 2], SetParseError> {
+    fn create_inversions() -> Result<[SeInversionRecipe; 2], RecipeParseError> {
         let negatives = "ELPX".parse()?;
         let positives = "GOTZ".parse()?;
 
-        let be_positive = InversionRecipe::new(negatives, positives);
-        let be_negative = InversionRecipe::new(positives, negatives);
+        let be_positive = InversionRecipe::new(negatives, positives)?;
+        let be_negative = InversionRecipe::new(positives, negatives)?;
 
         Ok([be_positive, be_negative])
     }

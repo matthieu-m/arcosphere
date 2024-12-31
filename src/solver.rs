@@ -341,11 +341,6 @@ where
     {
         searcher.fold(known, inputs, outputs);
 
-        #[cfg(debug_assertions)]
-        for (output, folding) in &*outputs {
-            dbg!(searcher.direction(), output, folding);
-        }
-
         inputs.clear();
         inputs.extend(outputs.keys().copied());
 
@@ -569,7 +564,7 @@ mod tests {
             source,
             target,
             catalysts: Set::new(),
-            recipes: vec![Recipe::Folding(FoldingRecipe::new(source, target))],
+            recipes: vec![Recipe::Folding(FoldingRecipe::new(source, target).unwrap())],
         }];
 
         let paths = solve(source, target);

@@ -113,14 +113,14 @@ where
 {
     /// Creates a new recipe.
     ///
-    /// #   Panics
+    /// Returns an error:
     ///
-    /// If the recipe is neither an inversion nor a folding recipe.
-    pub fn new(input: Set<A>, output: Set<A>) -> Self {
+    /// -   if the recipe is neither an inversion nor a folding recipe.
+    pub fn new(input: Set<A>, output: Set<A>) -> Result<Self, RecipeError> {
         if input.count_negatives() == output.count_negatives() {
-            Recipe::Folding(FoldingRecipe::new(input, output))
+            FoldingRecipe::new(input, output).map(Recipe::Folding)
         } else {
-            Recipe::Inversion(InversionRecipe::new(input, output))
+            InversionRecipe::new(input, output).map(Recipe::Inversion)
         }
     }
 
@@ -162,16 +162,20 @@ where
 {
     /// Creates a new folding recipe.
     ///
-    /// #   Panics
+    /// Returns an error:
     ///
-    /// If the number of arcospheres are not preserved.
-    /// If the polarities are not preserved.
-    pub fn new(input: Set<A>, output: Set<A>) -> Self {
-        assert_eq!(input.len(), output.len());
-        assert_eq!(input.count_negatives(), output.count_negatives());
-        assert_eq!(input.count_positives(), output.count_positives());
+    /// -   if the number of arcospheres are not preserved.
+    /// -   if the polarities are not preserved.
+    pub fn new(input: Set<A>, output: Set<A>) -> Result<Self, RecipeError> {
+        if input.len() != output.len() {
+            return Err(RecipeError::PreservationError);
+        }
 
-        Self { input, output }
+        if input.count_negatives() != output.count_negatives() {
+            return Err(RecipeError::PolarityError);
+        }
+
+        Ok(Self { input, output })
     }
 
     /// Returns a copy of the input set.
@@ -206,16 +210,20 @@ where
 {
     /// Creates a new recipe.
     ///
-    /// #   Panics
+    /// Returns an error:
     ///
-    /// If the number of arcospheres are not preserved.
-    /// If the polarities are not flipped.
-    pub fn new(input: Set<A>, output: Set<A>) -> Self {
-        assert_eq!(input.len(), output.len());
-        assert_eq!(input.count_negatives(), output.count_positives());
-        assert_eq!(input.count_positives(), output.count_negatives());
+    /// -   if the number of arcospheres are not preserved.
+    /// -   if the polarities are not flipped.
+    pub fn new(input: Set<A>, output: Set<A>) -> Result<Self, RecipeError> {
+        if input.len() != output.len() {
+            return Err(RecipeError::PreservationError);
+        }
 
-        Self { input, output }
+        if input.count_negatives() == output.count_negatives() {
+            return Err(RecipeError::PolarityError);
+        }
+
+        Ok(Self { input, output })
     }
 
     /// Returns a copy of the input set.
@@ -228,6 +236,23 @@ where
         self.output
     }
 }
+
+/// An error in creating a recipe.
+#[derive(Clone, Copy, Debug)]
+pub enum RecipeError {
+    /// The number of arcospheres is not preserved.
+    PreservationError,
+    /// The polarities of the arcospheres are changed in an unexpected way.
+    PolarityError,
+}
+
+impl fmt::Display for RecipeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{self:?}")
+    }
+}
+
+impl error::Error for RecipeError {}
 
 //
 //  Visualization
@@ -273,7 +298,7 @@ where
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (input, output) = parse_recipe(s)?;
 
-        Ok(Self::new(input, output))
+        Ok(Self::new(input, output)?)
     }
 }
 
@@ -287,7 +312,7 @@ where
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (input, output) = parse_recipe(s)?;
 
-        Ok(Self::new(input, output))
+        Ok(Self::new(input, output)?)
     }
 }
 
@@ -301,7 +326,7 @@ where
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (input, output) = parse_recipe(s)?;
 
-        Ok(Self::new(input, output))
+        Ok(Self::new(input, output)?)
     }
 }
 
@@ -338,6 +363,10 @@ where
 pub enum RecipeParseError {
     /// Format error.
     IllFormatted,
+    /// The number of arcospheres is not preserved.
+    PreservationError,
+    /// The polarities of the arcospheres are changed in an unexpected way.
+    PolarityError,
     /// Unknown arcosphere.
     Unknown(char),
 }
@@ -349,6 +378,15 @@ impl fmt::Display for RecipeParseError {
 }
 
 impl error::Error for RecipeParseError {}
+
+impl From<RecipeError> for RecipeParseError {
+    fn from(value: RecipeError) -> RecipeParseError {
+        match value {
+            RecipeError::PreservationError => RecipeParseError::PreservationError,
+            RecipeError::PolarityError => RecipeParseError::PolarityError,
+        }
+    }
+}
 
 impl From<SetParseError> for RecipeParseError {
     fn from(value: SetParseError) -> RecipeParseError {

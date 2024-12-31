@@ -36,10 +36,12 @@ pub mod executor;
 pub mod model;
 pub mod solver;
 pub mod space_exploration;
+pub mod verifier;
 
-use model::Set;
-use solver::{Path, Solver};
+use model::{Path, Set};
+use solver::Solver;
 use space_exploration::{SeArcosphere, SeRecipeSet};
+use verifier::{VerificationError, Verifier};
 
 /// Default Space Exploration solve function.
 pub fn solve(input: Set<SeArcosphere>, output: Set<SeArcosphere>) -> Vec<Path<SeArcosphere>> {
@@ -47,4 +49,11 @@ pub fn solve(input: Set<SeArcosphere>, output: Set<SeArcosphere>) -> Vec<Path<Se
     let executor = executor::DefaultExecutor::default();
 
     Solver::new(recipes).solve(executor, input, output)
+}
+
+/// Default Space Exploration verify function.
+pub fn verify(path: &Path<SeArcosphere>) -> Result<(), VerificationError<SeArcosphere>> {
+    let recipes = SeRecipeSet::new();
+
+    Verifier::new(recipes).verify(path)
 }

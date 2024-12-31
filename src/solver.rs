@@ -6,26 +6,9 @@ use fxhash::{FxHashMap, FxHashSet};
 
 use crate::{
     executor::Executor,
-    model::{Arcosphere, FoldingRecipe, Recipe, RecipeSet, Set},
+    model::{Arcosphere, FoldingRecipe, Path, Recipe, RecipeSet, Set},
     space_exploration::SeRecipeSet,
 };
-
-/// Possible path computed by the solver.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Path<A>
-where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
-{
-    /// Source arcospheres.
-    pub source: Set<A>,
-    /// Target arcospheres.
-    pub target: Set<A>,
-    /// Catalysts to use for this path.
-    pub catalysts: Set<A>,
-    /// Recipes to use, in order.
-    pub recipes: Vec<Recipe<A>>,
-}
 
 /// Solver.
 #[derive(Clone, Debug, Default)]

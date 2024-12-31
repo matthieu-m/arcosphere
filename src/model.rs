@@ -71,6 +71,23 @@ pub enum Polarity {
     Positive,
 }
 
+/// Possible path computed by the solver.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Path<A>
+where
+    A: Arcosphere,
+    [(); A::DIMENSION]: Sized,
+{
+    /// Source arcospheres.
+    pub source: Set<A>,
+    /// Target arcospheres.
+    pub target: Set<A>,
+    /// Catalysts to use for this path.
+    pub catalysts: Set<A>,
+    /// Recipes to use, in order.
+    pub recipes: Vec<Recipe<A>>,
+}
+
 /// A recipe, either inversion or folding.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Recipe<A>
@@ -89,6 +106,19 @@ where
     A: Arcosphere,
     [(); A::DIMENSION]: Sized,
 {
+    /// Creates a new recipe.
+    ///
+    /// #   Panics
+    ///
+    /// If the recipe is neither an inversion nor a folding recipe.
+    pub fn new(input: Set<A>, output: Set<A>) -> Self {
+        if input.count_negatives() == output.count_negatives() {
+            Recipe::Folding(FoldingRecipe::new(input, output))
+        } else {
+            Recipe::Inversion(InversionRecipe::new(input, output))
+        }
+    }
+
     /// Returns a copy of the input set.
     pub fn input(&self) -> Set<A> {
         match self {
@@ -196,6 +226,16 @@ where
 //  Visualization
 //
 
+impl<A> fmt::Display for Recipe<A>
+where
+    A: Arcosphere,
+    [(); A::DIMENSION]: Sized,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        format_recipe(f, self.input(), self.output())
+    }
+}
+
 impl<A> fmt::Display for FoldingRecipe<A>
 where
     A: Arcosphere,
@@ -213,6 +253,20 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         format_recipe(f, self.input(), self.output())
+    }
+}
+
+impl<A> str::FromStr for Recipe<A>
+where
+    A: Arcosphere,
+    [(); A::DIMENSION]: Sized,
+{
+    type Err = RecipeParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (input, output) = parse_recipe(s)?;
+
+        Ok(Self::new(input, output))
     }
 }
 

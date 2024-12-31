@@ -46,6 +46,9 @@ The recipe itself:
 
 Solve paths:
 
+    LGZ + P  =>  PG -> XO | XZ -> PT
+    LGZ + X  =>  XZ -> PT | GP -> OX
+
     TODO
 
 

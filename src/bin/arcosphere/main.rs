@@ -35,7 +35,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn run_solve(source: SeSet, target: SeSet) -> Result<(), Box<dyn Error>> {
     use std::fmt::Write;
 
-    let paths = arcosphere::solve(source, target);
+    let paths = arcosphere::solve(source, target)?;
 
     for path in paths {
         let mut line = format!("{} {}", path.source, path.target);

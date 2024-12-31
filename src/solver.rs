@@ -1,6 +1,6 @@
 //! Core solving logic, with modular setup.
 
-use core::{cmp::Reverse, iter, num::NonZeroU8};
+use core::{cmp::Reverse, error, fmt, iter, num::NonZeroU8};
 
 use fxhash::{FxHashMap, FxHashSet};
 
@@ -9,6 +9,44 @@ use crate::{
     model::{Arcosphere, FoldingRecipe, InversionRecipe, Path, Polarity, Recipe, RecipeSet, Set},
     space_exploration::SeRecipeSet,
 };
+
+/// Error which may occur during the search for a solution.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ResolutionError {
+    /// There is no solution, as the number of arcospheres is not preserved.
+    PreservationError,
+    /// There is no solution for the provided set of foldings.
+    NotWithFoldings,
+    /// There is no solution for the provided set of inversions.
+    NotWithInversions,
+    /// There is no solution for the given range of number of catalysts.
+    OutsideCatalysts,
+    /// There is no solution for the given range of number of inversions.
+    OutsideInversions,
+    /// There is no solution for the given range of number of recipes.
+    OutsideRecipes,
+}
+
+impl ResolutionError {
+    /// Returns whether the error is definitive.
+    ///
+    /// An error is definitive if the supplied recipes simply do not permit solving the problem, while it is not if
+    /// there exists a possibility, however remote, that increasing the search space would allow finding a solution.
+    pub fn is_definitive(&self) -> bool {
+        matches!(
+            self,
+            Self::PreservationError | Self::NotWithFoldings | Self::NotWithInversions
+        )
+    }
+}
+
+impl fmt::Display for ResolutionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{self:?}")
+    }
+}
+
+impl error::Error for ResolutionError {}
 
 /// Configuration of the solver.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -127,23 +165,27 @@ where
     ///
     /// If the solver does not return any solution, then raising either the number of catalysts or the number of recipes
     /// may allow it to find further solutions.
-    pub fn solve(&self, source: Set<R::Arcosphere>, target: Set<R::Arcosphere>) -> Vec<Path<R::Arcosphere>> {
+    pub fn solve(
+        &self,
+        source: Set<R::Arcosphere>,
+        target: Set<R::Arcosphere>,
+    ) -> Result<Vec<Path<R::Arcosphere>>, ResolutionError> {
         //  Special case: impossible.
 
         if source.len() != target.len() {
-            return Vec::new();
+            return Err(ResolutionError::PreservationError);
         }
 
         //  Special case: 0 conversion.
 
         if source == target {
-            return vec![Path {
+            return Ok(vec![Path {
                 source,
                 target,
                 count: ONE,
                 catalysts: Set::new(),
                 recipes: Vec::new(),
-            }];
+            }]);
         }
 
         //  Is an inversion required, or not?
@@ -168,7 +210,11 @@ where
     E: Executor,
     [(); R::Arcosphere::DIMENSION]: Sized,
 {
-    fn solve_by_inversion(&self, source: Set<R::Arcosphere>, target: Set<R::Arcosphere>) -> Vec<Path<R::Arcosphere>> {
+    fn solve_by_inversion(
+        &self,
+        source: Set<R::Arcosphere>,
+        target: Set<R::Arcosphere>,
+    ) -> Result<Vec<Path<R::Arcosphere>>, ResolutionError> {
         debug_assert_eq!(source.len(), target.len());
         debug_assert_ne!(source.count_negatives(), target.count_negatives());
 
@@ -179,24 +225,24 @@ where
                 continue;
             }
 
-            return vec![Path {
+            return Ok(vec![Path {
                 source,
                 target,
                 count: ONE,
                 catalysts: Set::new(),
                 recipes: vec![Recipe::Inversion(inversion)],
-            }];
+            }]);
         }
 
         //  Determine the inversion to use.
 
         let Some((count, inversion, apps)) = InversionSearcher::select_inversion(&self.recipes, source, target) else {
-            return Vec::new();
+            return Err(ResolutionError::NotWithInversions);
         };
 
         //  FIXME: may want to handle that one day... though it massively increases the search space.
         if apps.get() != 1 {
-            return Vec::new();
+            return Err(ResolutionError::OutsideInversions);
         }
 
         //  Special case: inversion is first.
@@ -204,18 +250,15 @@ where
         if inversion.input().is_subset_of(&(source * count)) {
             let post_inversion = source * count - inversion.input() + inversion.output();
 
-            let mut paths = self.solve_by_fold(post_inversion, target * count);
+            if let Ok(mut paths) = self.solve_by_fold(post_inversion, target * count) {
+                paths.iter_mut().for_each(|p| {
+                    p.source = source;
+                    p.target = target;
+                    p.count = count;
+                    p.recipes.insert(0, Recipe::Inversion(inversion));
+                });
 
-            paths.iter_mut().for_each(|p| {
-                p.source = source;
-                p.target = target;
-                p.count = count;
-                p.recipes.insert(0, Recipe::Inversion(inversion));
-            });
-
-            //  If paths is empty, mayhaps it is still possible using the more generic case of middle inversion?
-            if !paths.is_empty() {
-                return paths;
+                return Ok(paths);
             }
         }
 
@@ -224,18 +267,15 @@ where
         if inversion.output().is_subset_of(&(target * count)) {
             let pre_inversion = target * count - inversion.output() + inversion.input();
 
-            let mut paths = self.solve_by_fold(source * count, pre_inversion);
+            if let Ok(mut paths) = self.solve_by_fold(source * count, pre_inversion) {
+                paths.iter_mut().for_each(|p| {
+                    p.source = source;
+                    p.target = target;
+                    p.count = count;
+                    p.recipes.push(Recipe::Inversion(inversion));
+                });
 
-            paths.iter_mut().for_each(|p| {
-                p.source = source;
-                p.target = target;
-                p.count = count;
-                p.recipes.push(Recipe::Inversion(inversion));
-            });
-
-            //  If paths is empty, mayhaps it is still possible using the more generic case of middle inversion?
-            if !paths.is_empty() {
-                return paths;
+                return Ok(paths);
             }
         }
 
@@ -248,10 +288,12 @@ where
         target: Set<R::Arcosphere>,
         count: NonZeroU8,
         inversion: InversionRecipe<R::Arcosphere>,
-    ) -> Vec<Path<R::Arcosphere>> {
+    ) -> Result<Vec<Path<R::Arcosphere>>, ResolutionError> {
         let configuration = self.configuration.into();
 
-        for i in self.configuration.minimum_catalysts..self.configuration.maximum_catalysts {
+        let mut last_error = None;
+
+        for i in self.configuration.minimum_catalysts..=self.configuration.maximum_catalysts {
             let searchers = InversionSearcher::generate_searchers(
                 &self.recipes,
                 source,
@@ -264,19 +306,32 @@ where
 
             let tasks: Vec<_> = searchers.into_iter().map(|searcher| move || searcher.solve()).collect();
 
-            let results: Vec<_> = self.executor.execute(tasks).into_iter().flatten().collect();
+            let mut results = Vec::new();
+
+            for result in self.executor.execute(tasks) {
+                match result {
+                    Ok(paths) => results.extend(paths),
+                    Err(e) if e.is_definitive() => last_error = Some(e),
+                    Err(e) if e == ResolutionError::OutsideRecipes => last_error = Some(e),
+                    _ => (),
+                }
+            }
 
             if !results.is_empty() {
-                return results;
+                return Ok(results);
             }
         }
 
         //  Didn't find anything, it may be necessary to raise the number of catalysts or the number of recipes in a
         //  path.
-        Vec::new()
+        Err(last_error.unwrap_or(ResolutionError::OutsideCatalysts))
     }
 
-    fn solve_by_fold(&self, source: Set<R::Arcosphere>, target: Set<R::Arcosphere>) -> Vec<Path<R::Arcosphere>> {
+    fn solve_by_fold(
+        &self,
+        source: Set<R::Arcosphere>,
+        target: Set<R::Arcosphere>,
+    ) -> Result<Vec<Path<R::Arcosphere>>, ResolutionError> {
         debug_assert_eq!(source.len(), target.len());
         debug_assert_eq!(source.count_negatives(), target.count_negatives());
 
@@ -287,34 +342,45 @@ where
                 continue;
             }
 
-            return vec![Path {
+            return Ok(vec![Path {
                 source,
                 target,
                 count: ONE,
                 catalysts: Set::new(),
                 recipes: vec![Recipe::Folding(folding)],
-            }];
+            }]);
         }
 
         //  From then on, it gets a tad more complicated.
 
         let configuration = self.configuration.into();
 
-        for i in self.configuration.minimum_catalysts..self.configuration.maximum_catalysts {
+        let mut last_error = None;
+
+        for i in self.configuration.minimum_catalysts..=self.configuration.maximum_catalysts {
             let searchers = FoldSearcher::generate_searchers(&self.recipes, source, target, i as usize, configuration);
 
             let tasks: Vec<_> = searchers.into_iter().map(|searcher| move || searcher.solve()).collect();
 
-            let results: Vec<_> = self.executor.execute(tasks).into_iter().flatten().collect();
+            let mut results = Vec::new();
+
+            for result in self.executor.execute(tasks) {
+                match result {
+                    Ok(paths) => results.extend(paths),
+                    Err(e) if e.is_definitive() => last_error = Some(e),
+                    Err(e) if e == ResolutionError::OutsideRecipes => last_error = Some(e),
+                    _ => (),
+                }
+            }
 
             if !results.is_empty() {
-                return results;
+                return Ok(results);
             }
         }
 
         //  Didn't find anything, it may be necessary to raise the number of catalysts or the number of recipes in a
         //  path.
-        Vec::new()
+        Err(last_error.unwrap_or(ResolutionError::OutsideCatalysts))
     }
 }
 
@@ -565,29 +631,19 @@ where
     R: RecipeSet,
     [(); R::Arcosphere::DIMENSION]: Sized,
 {
-    fn solve(&self) -> Vec<Path<R::Arcosphere>> {
+    fn solve(&self) -> Result<Vec<Path<R::Arcosphere>>, ResolutionError> {
         //  1.  Solve the source -> inversion part, via folding.
-        let pre_inversions = self.pre.solve();
-
-        //  No need to search any further if it's just not working.
-        if pre_inversions.is_empty() {
-            return Vec::new();
-        }
+        let pre_inversions = self.pre.solve()?;
 
         //  2.  Solve the inversion -> target part, via folding.
-        let post_inversions = self.post.solve();
-
-        //  No need to search any further if it's just not working.
-        if post_inversions.is_empty() {
-            return Vec::new();
-        }
+        let post_inversions = self.post.solve()?;
 
         //  Banzai! Any combination of pre & post is a solution, so we need to combine them, while inserting the
         //  insertion in the middle.
 
         let inversion = Recipe::Inversion(self.inversion);
 
-        pre_inversions
+        Ok(pre_inversions
             .iter()
             .flat_map(|pre_inversion| {
                 post_inversions.iter().map(|post_inversion| {
@@ -608,7 +664,7 @@ where
                     }
                 })
             })
-            .collect()
+            .collect())
     }
 }
 
@@ -691,7 +747,7 @@ where
     R: RecipeSet,
     [(); R::Arcosphere::DIMENSION]: Sized,
 {
-    fn solve(&self) -> Vec<Path<R::Arcosphere>> {
+    fn solve(&self) -> Result<Vec<Path<R::Arcosphere>>, ResolutionError> {
         assert_eq!(self.source.count_negatives(), self.target.count_negatives());
         assert_eq!(self.source.count_positives(), self.target.count_positives());
 
@@ -711,24 +767,27 @@ where
 
         for _ in 0..maximum_iterations {
             if in_forward.is_empty() && in_backward.is_empty() {
-                //  No new solution, no progress can be made now.
-                break;
+                return Err(ResolutionError::NotWithFoldings);
             }
 
             let searcher = fold_searcher::ForwardSearcher { recipes: &self.recipes };
 
             if Self::advance(&searcher, &mut forward, &mut in_forward, &mut out_forward, &backward) {
-                return self.stitch(&forward, &backward, out_forward.keys().copied());
+                return Ok(self.stitch(&forward, &backward, out_forward.keys().copied()));
             }
 
             let searcher = fold_searcher::BackwardSearcher { recipes: &self.recipes };
 
             if Self::advance(&searcher, &mut backward, &mut in_backward, &mut out_backward, &forward) {
-                return self.stitch(&forward, &backward, out_backward.keys().copied());
+                return Ok(self.stitch(&forward, &backward, out_backward.keys().copied()));
             }
         }
 
-        Vec::new()
+        if in_forward.is_empty() && in_backward.is_empty() {
+            return Err(ResolutionError::NotWithFoldings);
+        }
+
+        Err(ResolutionError::OutsideRecipes)
     }
 
     //  Returns true if a connection has been found.
@@ -1014,6 +1073,8 @@ mod tests {
     }
 
     fn solve(source: SeSet, target: SeSet) -> Vec<Path<SeArcosphere>> {
-        SeSolver::<DefaultExecutor>::default().solve(source, target)
+        SeSolver::<DefaultExecutor>::default()
+            .solve(source, target)
+            .expect("success")
     }
 } // mod tests

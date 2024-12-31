@@ -37,7 +37,6 @@ impl Executor for SequentialExecutor {
 }
 
 #[cfg(feature = "rayon")]
-#[derive(Default)]
 pub use rayon::RayonExecutor;
 
 #[cfg(feature = "rayon")]
@@ -47,6 +46,7 @@ mod rayon {
     use super::Executor;
 
     /// A simple parallel executor, using the rayon crate.
+    #[derive(Default)]
     pub struct RayonExecutor;
 
     impl Executor for RayonExecutor {

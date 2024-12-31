@@ -4,6 +4,9 @@
 
 use core::{array, cmp, error, fmt, hash, iter, marker::PhantomData, ops, str};
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// An arcosphere.
 pub trait Arcosphere: Copy + fmt::Debug {
     /// The total number of arcospheres.
@@ -73,6 +76,7 @@ pub enum Polarity {
 
 /// Possible path computed by the solver.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Path<A>
 where
     A: Arcosphere,
@@ -90,6 +94,7 @@ where
 
 /// A recipe, either inversion or folding.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Recipe<A>
 where
     A: Arcosphere,
@@ -138,6 +143,7 @@ where
 
 /// A folding recipe.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FoldingRecipe<A>
 where
     A: Arcosphere,
@@ -181,6 +187,7 @@ where
 
 /// An inversion recipe.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct InversionRecipe<A>
 where
     A: Arcosphere,
@@ -788,3 +795,75 @@ where
         self
     }
 }
+
+//
+//  Serialization operations
+//
+
+#[cfg(feature = "serde")]
+mod serialization {
+    use core::{fmt, marker::PhantomData};
+
+    use serde::{de, ser, Deserialize, Serialize};
+
+    use super::{Arcosphere, Set};
+
+    impl<A> Serialize for Set<A>
+    where
+        A: Arcosphere,
+        [(); A::DIMENSION]: Sized,
+    {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: ser::Serializer,
+        {
+            //  Let's be reasonable, it's unlikely a set of arcosphere would have over 4096 arcospheres in there.
+            let mut buffer = [0u8; 4096];
+            let mut consumed = 0;
+
+            for sphere in *self {
+                let written = sphere.abbr().encode_utf8(&mut buffer[consumed..]).len();
+
+                consumed += written;
+            }
+
+            let result = core::str::from_utf8(&buffer[..consumed]).expect("valid UTF-8");
+
+            serializer.serialize_str(result)
+        }
+    }
+
+    struct SetVisitor<A>(PhantomData<A>);
+
+    impl<A> de::Visitor<'_> for SetVisitor<A>
+    where
+        A: Arcosphere,
+        [(); A::DIMENSION]: Sized,
+    {
+        type Value = Set<A>;
+
+        fn expecting(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+            f.write_str("a set of arcospheres")
+        }
+
+        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            value.parse().map_err(E::custom)
+        }
+    }
+
+    impl<'de, A> Deserialize<'de> for Set<A>
+    where
+        A: Arcosphere,
+        [(); A::DIMENSION]: Sized,
+    {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: de::Deserializer<'de>,
+        {
+            deserializer.deserialize_any(SetVisitor(PhantomData))
+        }
+    }
+} // mod serialization

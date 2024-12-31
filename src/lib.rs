@@ -46,9 +46,8 @@ use verifier::{VerificationError, Verifier};
 /// Default Space Exploration solve function.
 pub fn solve(input: Set<SeArcosphere>, output: Set<SeArcosphere>) -> Vec<Path<SeArcosphere>> {
     let recipes = SeRecipeSet::new();
-    let executor = executor::DefaultExecutor::default();
 
-    Solver::new(recipes).solve(executor, input, output)
+    Solver::<_, executor::DefaultExecutor>::new(recipes).solve(input, output)
 }
 
 /// Default Space Exploration verify function.

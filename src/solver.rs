@@ -10,52 +10,86 @@ use crate::{
     space_exploration::SeRecipeSet,
 };
 
+/// Configuration of the solver.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct SolverConfiguration {
+    /// The maximum number of catalysts to add.
+    pub maximum_catalysts: u8,
+    /// The minimum number of catalysts to add.
+    pub minimum_catalysts: u8,
+    /// The maximum number of recipes in the path from source to target.
+    pub maximum_recipes: u8,
+}
+
+impl Default for SolverConfiguration {
+    fn default() -> Self {
+        //  Sufficient for all SE recipes.
+        let maximum_catalysts = 8;
+        let minimum_catalysts = 0;
+        let maximum_recipes = 10;
+
+        Self {
+            maximum_catalysts,
+            minimum_catalysts,
+            maximum_recipes,
+        }
+    }
+}
+
 /// Solver.
 #[derive(Clone, Debug, Default)]
-pub struct Solver<R>
+pub struct Solver<R, E>
 where
     R: RecipeSet,
     [(); R::Arcosphere::DIMENSION]: Sized,
 {
     recipes: R,
-    configuration: Configuration,
+    executor: E,
+    configuration: SolverConfiguration,
 }
 
 //
 //  Configuration
 //
 
-impl<R> Solver<R>
+impl<R, E> Solver<R, E>
 where
     R: RecipeSet,
     [(); R::Arcosphere::DIMENSION]: Sized,
 {
     /// Creates a new solver based on a set of recipes.
-    pub fn new(recipes: R) -> Self {
-        let configuration = Configuration::default();
+    pub fn new(recipes: R) -> Self
+    where
+        E: Default,
+    {
+        let executor = E::default();
+        let configuration = SolverConfiguration::default();
 
-        Self { recipes, configuration }
+        Self {
+            recipes,
+            executor,
+            configuration,
+        }
     }
 
-    /// Sets the maximum number of catalysts to use.
-    pub fn set_maximum_catalysts(mut self, maximum: u8) -> Self {
-        self.configuration.maximum_catalysts = maximum;
+    /// Sets the configuration.
+    pub fn with_configuration(mut self, configuration: SolverConfiguration) -> Self {
+        self.configuration = configuration;
 
         self
     }
 
-    /// Sets the minimum number of catalysts to use.
-    pub fn set_minimum_catalysts(mut self, minimum: u8) -> Self {
-        self.configuration.minimum_catalysts = minimum;
+    /// Sets the executor.
+    pub fn with_executor<OE>(self, executor: OE) -> Solver<R, OE> {
+        let Solver {
+            recipes, configuration, ..
+        } = self;
 
-        self
-    }
-
-    /// Sets the maximum number of recipes in the path.
-    pub fn set_maximum_recipes(mut self, maximum: u8) -> Self {
-        self.configuration.maximum_recipes = maximum;
-
-        self
+        Solver {
+            recipes,
+            executor,
+            configuration,
+        }
     }
 }
 
@@ -64,11 +98,14 @@ where
 //
 
 /// Solver for default Space Exploration.
-pub type SeSolver = Solver<SeRecipeSet>;
+pub type SeSolver<E> = Solver<SeRecipeSet, E>;
 
-impl SeSolver {
+impl<E> SeSolver<E> {
     /// Creates a new solver for space exploration.
-    pub fn space_exploration() -> Self {
+    pub fn space_exploration() -> Self
+    where
+        E: Default,
+    {
         Self::default()
     }
 }
@@ -77,9 +114,10 @@ impl SeSolver {
 //  Solving!
 //
 
-impl<R> Solver<R>
+impl<R, E> Solver<R, E>
 where
     R: RecipeSet<Arcosphere: Send> + Clone + Send,
+    E: Executor,
     [(); R::Arcosphere::DIMENSION]: Sized,
 {
     /// Looks for all possible recipe paths from `source` to `target` with a minimum number of catalysts.
@@ -89,15 +127,7 @@ where
     ///
     /// If the solver does not return any solution, then raising either the number of catalysts or the number of recipes
     /// may allow it to find further solutions.
-    pub fn solve<E>(
-        &self,
-        executor: E,
-        source: Set<R::Arcosphere>,
-        target: Set<R::Arcosphere>,
-    ) -> Vec<Path<R::Arcosphere>>
-    where
-        E: Executor,
-    {
+    pub fn solve(&self, source: Set<R::Arcosphere>, target: Set<R::Arcosphere>) -> Vec<Path<R::Arcosphere>> {
         //  Special case: 0 conversion.
 
         if source == target {
@@ -126,12 +156,14 @@ where
 
         //  From then on, it gets a tad more complicated.
 
+        let configuration = self.configuration.into();
+
         for i in self.configuration.minimum_catalysts..self.configuration.maximum_catalysts {
-            let searchers = self.generate_searchers(source, target, i as usize);
+            let searchers = Searcher::generate_searchers(&self.recipes, source, target, i as usize, configuration);
 
             let tasks: Vec<_> = searchers.into_iter().map(|searcher| move || searcher.solve()).collect();
 
-            let results: Vec<_> = executor.execute(tasks).into_iter().flatten().collect();
+            let results: Vec<_> = self.executor.execute(tasks).into_iter().flatten().collect();
 
             if !results.is_empty() {
                 return results;
@@ -148,16 +180,42 @@ where
 //  Implementation
 //
 
-impl<R> Solver<R>
+#[derive(Clone, Copy, Debug)]
+struct SearcherConfiguration {
+    maximum_recipes: u8,
+}
+
+impl From<SolverConfiguration> for SearcherConfiguration {
+    fn from(value: SolverConfiguration) -> SearcherConfiguration {
+        let SolverConfiguration { maximum_recipes, .. } = value;
+
+        SearcherConfiguration { maximum_recipes }
+    }
+}
+
+struct Searcher<R>
 where
-    R: RecipeSet<Arcosphere: Send> + Clone + Send,
+    R: RecipeSet,
+    [(); R::Arcosphere::DIMENSION]: Sized,
+{
+    recipes: R,
+    source: Set<R::Arcosphere>,
+    target: Set<R::Arcosphere>,
+    catalysts: Set<R::Arcosphere>,
+    configuration: SearcherConfiguration,
+}
+
+impl<R> Searcher<R>
+where
+    R: RecipeSet + Clone,
     [(); R::Arcosphere::DIMENSION]: Sized,
 {
     fn generate_searchers(
-        &self,
+        recipes: &R,
         source: Set<R::Arcosphere>,
         target: Set<R::Arcosphere>,
         number_catalysts: usize,
+        configuration: SearcherConfiguration,
     ) -> Vec<Searcher<R>> {
         let mut result = Vec::new();
 
@@ -165,17 +223,26 @@ where
             return result;
         }
 
-        self.generate_searchers_rec(source, target, Set::new(), number_catalysts, &mut result);
+        Self::generate_searchers_rec(
+            recipes,
+            source,
+            target,
+            Set::new(),
+            number_catalysts,
+            configuration,
+            &mut result,
+        );
 
         result
     }
 
     fn generate_searchers_rec(
-        &self,
+        recipes: &R,
         source: Set<R::Arcosphere>,
         target: Set<R::Arcosphere>,
         catalysts: Set<R::Arcosphere>,
         number_catalysts: usize,
+        configuration: SearcherConfiguration,
         output: &mut Vec<Searcher<R>>,
     ) {
         debug_assert!(number_catalysts > 0);
@@ -190,11 +257,11 @@ where
 
         if number_catalysts == 1 {
             let searchers = generator.map(|catalysts| Searcher {
-                recipes: self.recipes.clone(),
+                recipes: recipes.clone(),
                 source,
                 target,
                 catalysts,
-                configuration: self.configuration,
+                configuration,
             });
 
             output.extend(searchers);
@@ -202,46 +269,17 @@ where
         }
 
         for catalysts in generator {
-            self.generate_searchers_rec(source, target, catalysts, number_catalysts - 1, output);
+            Self::generate_searchers_rec(
+                recipes,
+                source,
+                target,
+                catalysts,
+                number_catalysts - 1,
+                configuration,
+                output,
+            );
         }
     }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct Configuration {
-    //  The maximum number of catalysts to add.
-    maximum_catalysts: u8,
-    //  The minimum number of catalysts to add.
-    minimum_catalysts: u8,
-    //  The maximum number of recipes in the path from source to target.
-    maximum_recipes: u8,
-}
-
-impl Default for Configuration {
-    fn default() -> Self {
-        //  Sufficient for all SE recipes.
-        let maximum_catalysts = 8;
-        let minimum_catalysts = 0;
-        let maximum_recipes = 10;
-
-        Self {
-            maximum_catalysts,
-            minimum_catalysts,
-            maximum_recipes,
-        }
-    }
-}
-
-struct Searcher<R>
-where
-    R: RecipeSet,
-    [(); R::Arcosphere::DIMENSION]: Sized,
-{
-    recipes: R,
-    source: Set<R::Arcosphere>,
-    target: Set<R::Arcosphere>,
-    catalysts: Set<R::Arcosphere>,
-    configuration: Configuration,
 }
 
 impl<R> Searcher<R>
@@ -573,8 +611,6 @@ mod tests {
     }
 
     fn solve(source: SeSet, target: SeSet) -> Vec<Path<SeArcosphere>> {
-        let executor = DefaultExecutor::default();
-
-        SeSolver::default().solve(executor, source, target)
+        SeSolver::<DefaultExecutor>::default().solve(source, target)
     }
 } // mod tests

@@ -104,7 +104,7 @@ where
             }
         }
 
-        let mut step = path.source + path.catalysts;
+        let mut step = path.source * path.count + path.catalysts;
 
         for (index, &recipe) in path.recipes.iter().enumerate() {
             if !recipe.input().is_subset_of(&step) {
@@ -118,11 +118,13 @@ where
             step = step - recipe.input() + recipe.output();
         }
 
-        if !path.target.is_subset_of(&step) {
+        let target = path.target * path.count;
+
+        if !target.is_subset_of(&step) {
             return Err(VerificationError::FailedTarget { result: step });
         }
 
-        let remainder = step - path.target;
+        let remainder = step - target;
 
         if remainder != path.catalysts {
             return Err(VerificationError::FailedCatalysts { remainder });

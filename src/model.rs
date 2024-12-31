@@ -2,7 +2,7 @@
 //!
 //! The `space_exploration` module provides the default arcospheres & recipes normally available in SE.
 
-use core::{array, cmp, error, fmt, hash, iter, marker::PhantomData, ops, str};
+use core::{array, cmp, error, fmt, hash, iter, marker::PhantomData, num::NonZeroU8, ops, str};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -75,6 +75,8 @@ pub enum Polarity {
 }
 
 /// Possible path computed by the solver.
+///
+/// This path converts source * count + catalysts into target * count + catalysts.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Path<A>
@@ -86,6 +88,11 @@ where
     pub source: Set<A>,
     /// Target arcospheres.
     pub target: Set<A>,
+    /// Minimum number of source -> target transformations to perform.
+    ///
+    /// When inversions kick in, it may be necessary to batch the conversions for the number of polarity flips to line
+    /// up. Thus, while in trivial cases count is 1, with inversions it may be greater.
+    pub count: NonZeroU8,
     /// Catalysts to use for this path.
     pub catalysts: Set<A>,
     /// Recipes to use, in order.
@@ -224,6 +231,17 @@ where
         }
 
         Ok(Self { input, output })
+    }
+
+    /// Returns the polarity of the recipe.
+    ///
+    /// An inversion recipe of positive polarity results in _more_ positive arcospheres in its output, and vice-versa.
+    pub fn polarity(&self) -> Polarity {
+        if self.input.count_negatives() > self.output.count_negatives() {
+            Polarity::Positive
+        } else {
+            Polarity::Negative
+        }
     }
 
     /// Returns a copy of the input set.
@@ -420,6 +438,16 @@ where
 
         Self {
             spheres: [0; A::DIMENSION],
+            _marker,
+        }
+    }
+
+    /// Creates a full set.
+    pub fn full() -> Self {
+        let _marker = PhantomData;
+
+        Self {
+            spheres: [1; A::DIMENSION],
             _marker,
         }
     }
@@ -829,6 +857,64 @@ where
 
     fn sub(mut self, other: Self) -> Self::Output {
         self -= other;
+
+        self
+    }
+}
+
+impl<A> ops::MulAssign<u8> for Set<A>
+where
+    A: Arcosphere,
+    [(); A::DIMENSION]: Sized,
+{
+    /// Multiplies the number of each elements of the set by `other`.
+    ///
+    /// #   Panics
+    ///
+    /// If one of the counts overflows.
+    fn mul_assign(&mut self, other: u8) {
+        self.spheres.iter_mut().for_each(|s| *s = s.strict_mul(other));
+    }
+}
+
+impl<A> ops::Mul<u8> for Set<A>
+where
+    A: Arcosphere,
+    [(); A::DIMENSION]: Sized,
+{
+    type Output = Self;
+
+    fn mul(mut self, other: u8) -> Self::Output {
+        self *= other;
+
+        self
+    }
+}
+
+impl<A> ops::MulAssign<NonZeroU8> for Set<A>
+where
+    A: Arcosphere,
+    [(); A::DIMENSION]: Sized,
+{
+    /// Multiplies the number of each elements of the set by `other`.
+    ///
+    /// #   Panics
+    ///
+    /// If one of the counts overflows.
+    fn mul_assign(&mut self, other: NonZeroU8) {
+        self.spheres.iter_mut().for_each(|s| *s = s.strict_mul(other.get()));
+    }
+}
+
+impl<A> ops::Mul<NonZeroU8> for Set<A>
+where
+    A: Arcosphere,
+    [(); A::DIMENSION]: Sized,
+{
+    type Output = Self;
+
+    fn mul(mut self, other: NonZeroU8) -> Self::Output {
+        self *= other;
 
         self
     }

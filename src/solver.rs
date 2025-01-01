@@ -422,6 +422,14 @@ where
             .collect()
     }
 
+    //  Generates all permutations of `number` spheres.
+    //
+    //  The generated number of permutations is "triangularly" quadratic:
+    //
+    //  -   0: 0.
+    //  -   1: 8, one of each.
+    //  -   2: 36, at each level 8, then 7, then 6, etc...
+    //  -   ...
     fn generate_catalysts(number: usize) -> Vec<Set<R::Arcosphere>> {
         let mut result = Vec::new();
 
@@ -437,7 +445,14 @@ where
     fn generate_catalysts_rec(catalysts: Set<R::Arcosphere>, number: usize, output: &mut Vec<Set<R::Arcosphere>>) {
         debug_assert!(number > 0);
 
-        let generator = (0..R::Arcosphere::DIMENSION).map(|i| {
+        //  Do not insert spheres with a lower index than the highest index sphere used: it only creates duplicates.
+        let minimum = catalysts
+            .into_iter()
+            .last()
+            .map(|sphere| sphere.into_index())
+            .unwrap_or_default();
+
+        let generator = (minimum..R::Arcosphere::DIMENSION).map(|i| {
             let mut catalysts = catalysts;
 
             catalysts.insert(R::Arcosphere::from_index(i));
@@ -725,7 +740,7 @@ mod tests {
     use crate::{
         executor::DefaultExecutor,
         model::FoldingRecipe,
-        space_exploration::{SeArcosphere, SeSet},
+        space_exploration::{SePath, SeSet},
     };
 
     use super::*;
@@ -800,9 +815,32 @@ mod tests {
         assert_eq!(expected, paths);
     }
 
-    fn solve(source: SeSet, target: SeSet) -> Vec<Path<SeArcosphere>> {
+    fn solve(source: SeSet, target: SeSet) -> Vec<SePath> {
         SeSolver::<DefaultExecutor>::default()
             .solve(source, target)
             .expect("success")
+    }
+
+    #[test]
+    fn catalysts_zero_five() {
+        const EXPECTED: [usize; 6] = [0, 8, 36, 120, 330, 792];
+
+        for (n, expected) in EXPECTED.into_iter().enumerate() {
+            let catalysts = generate_catalysts(n);
+
+            assert_eq!(expected, catalysts.len(), "{n}: {catalysts:?}");
+
+            let deduplicated: FxHashSet<_> = catalysts.iter().copied().collect();
+
+            assert_eq!(
+                catalysts.len(),
+                deduplicated.len(),
+                "{n}: {catalysts:?} <> {deduplicated:?}"
+            );
+        }
+    }
+
+    fn generate_catalysts(n: usize) -> Vec<SeSet> {
+        Searcher::<SeRecipeSet>::generate_catalysts(n)
     }
 } // mod tests

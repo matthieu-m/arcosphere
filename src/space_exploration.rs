@@ -61,7 +61,7 @@ impl Default for SeRecipeSet {
 }
 
 /// Space Exploration default Arcospheres.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[repr(u8)]
 pub enum SeArcosphere {
     /// ε -> [E]psilon.

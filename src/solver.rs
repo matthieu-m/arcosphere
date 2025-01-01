@@ -301,9 +301,17 @@ where
                 }
             }
 
-            if !results.is_empty() {
-                return Ok(results);
-            }
+            let Some(shortest) = results.iter().map(|p| p.recipes.len()).min() else {
+                continue;
+            };
+
+            //  Should longer paths still be made available?
+            results.retain(|p| p.recipes.len() == shortest);
+
+            //  Stable output is nice, and definitely not the most costly part anyway...
+            results.sort_unstable();
+
+            return Ok(results);
         }
 
         //  Didn't find anything, it may be necessary to raise the number of catalysts or the number of recipes in a
@@ -744,6 +752,11 @@ mod tests {
     };
 
     use super::*;
+
+    #[test]
+    fn size() {
+        assert_eq!(186, core::mem::size_of::<Searcher<SeRecipeSet>>());
+    }
 
     #[test]
     fn solve_zero() {

@@ -77,7 +77,7 @@ pub enum Polarity {
 /// Possible path computed by the solver.
 ///
 /// This path converts source * count + catalysts into target * count + catalysts.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Path<A>
 where
@@ -99,8 +99,77 @@ where
     pub recipes: Vec<Recipe<A>>,
 }
 
+impl<A> Path<A>
+where
+    A: Arcosphere,
+    [(); A::DIMENSION]: Sized,
+{
+    #[allow(clippy::type_complexity)]
+    fn tuplify(&self) -> (Set<A>, Set<A>, NonZeroU8, Set<A>, &[Recipe<A>]) {
+        (self.source, self.target, self.count, self.catalysts, &self.recipes)
+    }
+}
+
+//
+//  Identity operations
+//
+
+impl<A> cmp::PartialEq for Path<A>
+where
+    A: Arcosphere,
+    [(); A::DIMENSION]: Sized,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.tuplify() == other.tuplify()
+    }
+}
+
+impl<A> cmp::Eq for Path<A>
+where
+    A: Arcosphere,
+    [(); A::DIMENSION]: Sized,
+{
+}
+
+impl<A> hash::Hash for Path<A>
+where
+    A: Arcosphere,
+    [(); A::DIMENSION]: Sized,
+{
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: hash::Hasher,
+    {
+        self.tuplify().hash(state);
+    }
+}
+
+//
+//  Order operations
+//
+
+impl<A> cmp::PartialOrd for Path<A>
+where
+    A: Arcosphere,
+    [(); A::DIMENSION]: Sized,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<A> cmp::Ord for Path<A>
+where
+    A: Arcosphere,
+    [(); A::DIMENSION]: Sized,
+{
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.tuplify().cmp(&other.tuplify())
+    }
+}
+
 /// A recipe, either inversion or folding.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Recipe<A>
 where
@@ -149,7 +218,7 @@ where
 }
 
 /// A folding recipe.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FoldingRecipe<A>
 where
@@ -197,7 +266,7 @@ where
 }
 
 /// An inversion recipe.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct InversionRecipe<A>
 where
@@ -413,6 +482,69 @@ impl From<SetParseError> for RecipeParseError {
         }
     }
 }
+
+//
+//  Identity operations
+//
+
+macro_rules! recipe_impl_eq_hash_ord {
+    ($recipe:ident) => {
+        impl<A> cmp::PartialEq for $recipe<A>
+        where
+            A: Arcosphere,
+            [(); A::DIMENSION]: Sized,
+        {
+            fn eq(&self, other: &Self) -> bool {
+                self.input() == other.input() && self.output() == other.output()
+            }
+        }
+
+        impl<A> cmp::Eq for $recipe<A>
+        where
+            A: Arcosphere,
+            [(); A::DIMENSION]: Sized,
+        {
+        }
+
+        impl<A> hash::Hash for $recipe<A>
+        where
+            A: Arcosphere,
+            [(); A::DIMENSION]: Sized,
+        {
+            fn hash<H>(&self, state: &mut H)
+            where
+                H: hash::Hasher,
+            {
+                self.input().hash(state);
+                self.output().hash(state);
+            }
+        }
+
+        impl<A> cmp::PartialOrd for $recipe<A>
+        where
+            A: Arcosphere,
+            [(); A::DIMENSION]: Sized,
+        {
+            fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+
+        impl<A> cmp::Ord for $recipe<A>
+        where
+            A: Arcosphere,
+            [(); A::DIMENSION]: Sized,
+        {
+            fn cmp(&self, other: &Self) -> cmp::Ordering {
+                self.input().cmp(&other.input())
+            }
+        }
+    };
+}
+
+recipe_impl_eq_hash_ord!(Recipe);
+recipe_impl_eq_hash_ord!(FoldingRecipe);
+recipe_impl_eq_hash_ord!(InversionRecipe);
 
 /// A set of arcosphere.
 ///
@@ -775,6 +907,30 @@ where
         H: hash::Hasher,
     {
         self.spheres.hash(state);
+    }
+}
+
+//
+//  Order operations
+//
+
+impl<A> cmp::PartialOrd for Set<A>
+where
+    A: Arcosphere,
+    [(); A::DIMENSION]: Sized,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<A> cmp::Ord for Set<A>
+where
+    A: Arcosphere,
+    [(); A::DIMENSION]: Sized,
+{
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.spheres.cmp(&other.spheres).reverse()
     }
 }
 

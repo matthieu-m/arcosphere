@@ -22,10 +22,11 @@ Of note: the second alternative exhibits flipped polarity, requiring at least on
 
 Solve paths:
 
-    TODO (first)
+    //  39 other variants, see naquium_tesseract_ept.txt
+    EPT x4 + E  =>  ET -> PO | EO -> LG | PG -> XO | EO -> LG | PG -> XO | EO -> LG | PG -> XO | EO -> LG | LT -> EZ | LT -> EZ | PG -> XO | EO -> LG | PG -> XO | LT -> EZ | EO -> LG | XG -> LZ
 
     //  438 other variants, see naquium_tesseract_gop.txt
-    GOP x4 + E  =>  EO -> GL | LO -> XT | XG -> LZ | LO -> XT | GOTZ -> ELPX | LT -> EZ | PG -> XO | PG -> XO | EO -> GL | EO -> GL | XG -> LZ | XG -> LZ | PZ -> EG | PG -> XO | EO -> GL | XG -> LZ | PG -> XO | LO -> XT | LT -> EZ
+    GOP x4 + E  =>  EO -> LG | LO -> XT | XG -> LZ | LO -> XT | GOTZ -> ELPX | LT -> EZ | PG -> XO | PG -> XO | EO -> LG | EO -> LG | XG -> LZ | XG -> LZ | PZ -> EG | PG -> XO | EO -> LG | XG -> LZ | PG -> XO | LO -> XT | LT -> EZ
 
 
 ##  Naquium Processor
@@ -38,7 +39,11 @@ Of note: both alternatives exhibit flipped polarity, requiring at least one inve
 
 Solve paths:
 
-    TODO (both)
+    //  92 other variants, see naquium_processor_lllllx.txt
+    LLLLLX x2 + O   =>  LO -> XT | LT -> EZ | XZ -> PT | ELPX -> GOTZ | LT -> EZ | LO -> XT | ET -> PO | LO -> XT | PG -> XO | LT -> EZ | LT -> EZ | XZ -> PT | XZ -> PT | XZ -> PT | PZ -> EG | ELPX -> GOTZ | ET -> PO | LT -> EZ
+
+    //  92 other variants, see naquium_processor_lxxxxx.txt
+    LXXXXX x2 + G   =>  XG -> LZ | XZ -> PT | LT -> EZ | ELPX -> GOTZ | LT -> EZ | XG -> LZ | EO -> LG | XG -> LZ | XZ -> PT | LT -> EZ | XZ -> PT | LT -> EZ | XZ -> PT | XZ -> PT | ET -> PO | ELPX -> GOTZ | PZ -> EG | PZ -> EG
 
 
 #   Advanced Science II
@@ -52,9 +57,26 @@ The recipe itself:
 Solve paths:
 
     LGZ + P =>  PG -> XO | XZ -> PT
-    LGZ + X =>  XZ -> PT | GP -> OX
+    LGZ + X =>  XZ -> PT | PG -> XO
 
-    TODO (second)
+    XOT x4 + EG =>  XG -> LZ   ET -> PO   PZ -> EG   EO -> LG   XG -> LZ   XZ -> PT   XG -> LZ   PZ -> EG
+    XOT x4 + EG =>  XG -> LZ   ET -> PO   PZ -> EG   XG -> LZ   XZ -> PT   EO -> LG   XG -> LZ   PZ -> EG
+    XOT x4 + EG =>  XG -> LZ   XZ -> PT   EO -> LG   XG -> LZ   PZ -> EG   XG -> LZ   ET -> PO   PZ -> EG
+    XOT x4 + EP =>  EO -> LG   XG -> LZ   PZ -> EG   ET -> PO   XG -> LZ   PZ -> EG   XG -> LZ   XZ -> PT
+    XOT x4 + EP =>  EO -> LG   XG -> LZ   PZ -> EG   XG -> LZ   ET -> PO   PZ -> EG   XG -> LZ   XZ -> PT
+    XOT x4 + EZ =>  EO -> LG   XG -> LZ   XZ -> PT   PZ -> EG   XG -> LZ   ET -> PO   PZ -> EG   XG -> LZ
+    XOT x4 + EZ =>  ET -> PO   PZ -> EG   EO -> LG   XG -> LZ   XZ -> PT   XG -> LZ   PZ -> EG   XG -> LZ
+    XOT x4 + EZ =>  ET -> PO   PZ -> EG   XG -> LZ   XZ -> PT   EO -> LG   XG -> LZ   PZ -> EG   XG -> LZ
+    XOT x4 + GG =>  XG -> LZ   XG -> LZ   XZ -> PT   PZ -> EG   XG -> LZ   ET -> PO   PZ -> EG   EO -> LG
+    XOT x4 + PG =>  XG -> LZ   PZ -> EG   XG -> LZ   EO -> LG   XZ -> PT   XG -> LZ   PZ -> EG   ET -> PO
+    XOT x4 + PG =>  XG -> LZ   PZ -> EG   XG -> LZ   ET -> PO   PZ -> EG   XG -> LZ   XZ -> PT   EO -> LG
+    XOT x4 + PG =>  XG -> LZ   PZ -> EG   XG -> LZ   XZ -> PT   EO -> LG   XG -> LZ   PZ -> EG   ET -> PO
+    XOT x4 + GZ =>  XG -> LZ   XZ -> PT   PZ -> EG   ET -> PO   XG -> LZ   PZ -> EG   XG -> LZ   EO -> LG
+    XOT x4 + GZ =>  XG -> LZ   XZ -> PT   PZ -> EG   XG -> LZ   ET -> PO   PZ -> EG   XG -> LZ   EO -> LG
+    XOT x4 + PZ =>  PZ -> EG   XG -> LZ   EO -> LG   XG -> LZ   XZ -> PT   PZ -> EG   XG -> LZ   ET -> PO
+    XOT x4 + PZ =>  PZ -> EG   XG -> LZ   ET -> PO   PZ -> EG   EO -> LG   XG -> LZ   XZ -> PT   XG -> LZ
+    XOT x4 + PZ =>  PZ -> EG   XG -> LZ   XZ -> PT   EO -> LG   XG -> LZ   PZ -> EG   XG -> LZ   ET -> PO
+    XOT x4 + ZZ =>  XZ -> PT   PZ -> EG   XG -> LZ   ET -> PO   PZ -> EG   XG -> LZ   EO -> LG   XG -> LZ
 
 
 ##  Singularity Application Data
@@ -66,9 +88,26 @@ The recipe itself:
 Solve paths:
 
     EGZ + P =>  PG -> XO | XZ -> PT
-    EGZ + X =>  XZ -> PT | GP -> OX
+    EGZ + X =>  XZ -> PT | PG -> XO
 
-    TODO (second)
+    POT x4 + GG =>  PG -> XO | XG -> LZ | LO -> XT | PZ -> EG | XG -> LZ | PZ -> EG | LT -> EZ | PZ -> EG
+    POT x4 + LG =>  LO -> XT | XG -> LZ | LT -> EZ | PZ -> EG | PG -> XO | PZ -> EG | XG -> LZ | PZ -> EG
+    POT x4 + LG =>  LO -> XT | XG -> LZ | PZ -> EG | PG -> XO | LT -> EZ | PZ -> EG | XG -> LZ | PZ -> EG
+    POT x4 + LG =>  LT -> EZ | PG -> XO | PZ -> EG | XG -> LZ | LO -> XT | PZ -> EG | XG -> LZ | PZ -> EG
+    POT x4 + XG =>  XG -> LZ | LO -> XT | PZ -> EG | XG -> LZ | PZ -> EG | LT -> EZ | PZ -> EG | PG -> XO
+    POT x4 + XG =>  XG -> LZ | LT -> EZ | PZ -> EG | PZ -> EG | PG -> XO | XG -> LZ | PZ -> EG | LO -> XT
+    POT x4 + XG =>  XG -> LZ | PZ -> EG | PG -> XO | LT -> EZ | PZ -> EG | XG -> LZ | PZ -> EG | LO -> XT
+    POT x4 + GZ =>  PG -> XO | PZ -> EG | XG -> LZ | LO -> XT | PZ -> EG | XG -> LZ | PZ -> EG | LT -> EZ
+    POT x4 + GZ =>  PG -> XO | PZ -> EG | XG -> LZ | PZ -> EG | LO -> XT | XG -> LZ | PZ -> EG | LT -> EZ
+    POT x4 + LX =>  LT -> EZ | PZ -> EG | XG -> LZ | LO -> XT | PZ -> EG | XG -> LZ | PZ -> EG | PG -> XO
+    POT x4 + LX =>  LT -> EZ | PZ -> EG | XG -> LZ | PZ -> EG | LO -> XT | XG -> LZ | PZ -> EG | PG -> XO
+    POT x4 + LZ =>  LO -> XT | PZ -> EG | XG -> LZ | LT -> EZ | PZ -> EG | PZ -> EG | PG -> XO | XG -> LZ
+    POT x4 + LZ =>  LO -> XT | PZ -> EG | XG -> LZ | PZ -> EG | LT -> EZ | PZ -> EG | PG -> XO | XG -> LZ
+    POT x4 + LZ =>  PZ -> EG | PG -> XO | LT -> EZ | PZ -> EG | XG -> LZ | PZ -> EG | LO -> XT | XG -> LZ
+    POT x4 + XZ =>  PZ -> EG | XG -> LZ | LO -> XT | PZ -> EG | XG -> LZ | PZ -> EG | PG -> XO | LT -> EZ
+    POT x4 + XZ =>  PZ -> EG | XG -> LZ | LT -> EZ | PZ -> EG | PZ -> EG | PG -> XO | XG -> LZ | LO -> XT
+    POT x4 + XZ =>  PZ -> EG | XG -> LZ | PZ -> EG | PG -> XO | LT -> EZ | PZ -> EG | XG -> LZ | LO -> XT
+    POT x4 + ZZ =>  PZ -> EG | PG -> XO | PZ -> EG | XG -> LZ | PZ -> EG | LO -> XT | XG -> LZ | LT -> EZ
 
 
 ##  Timespace Manipulation Data
@@ -79,7 +118,24 @@ The recipe itself:
 
 Solve paths:
 
-    TODO (first)
+    ELG x4 + PP =>  PG -> XO | PG -> XO | XG -> LZ | XZ -> PT | LT -> EZ | PG -> XO | XZ -> PT | ET -> PO
+    ELG x4 + PT =>  PG -> XO | ET -> PO | PG -> XO | XG -> LZ | XZ -> PT | LT -> EZ | PG -> XO | XZ -> PT
+    ELG x4 + PT =>  LT -> EZ | PG -> XO | XZ -> PT | ET -> PO | PG -> XO | XG -> LZ | PG -> XO | XZ -> PT
+    ELG x4 + PT =>  LT -> EZ | PG -> XO | XZ -> PT | PG -> XO | XG -> LZ | ET -> PO | PG -> XO | XZ -> PT
+    ELG x4 + PX =>  PG -> XO | XG -> LZ | XZ -> PT | PG -> XO | LT -> EZ | XZ -> PT | PG -> XO | ET -> PO
+    ELG x4 + PX =>  PG -> XO | XG -> LZ | XZ -> PT | LT -> EZ | PG -> XO | XZ -> PT | PG -> XO | ET -> PO
+    ELG x4 + PZ =>  PG -> XO | XZ -> PT | ET -> PO | PG -> XO | XG -> LZ | PG -> XO | XZ -> PT | LT -> EZ
+    ELG x4 + PZ =>  PG -> XO | XZ -> PT | PG -> XO | XG -> LZ | ET -> PO | PG -> XO | XZ -> PT | LT -> EZ
+    ELG x4 + PZ =>  PG -> XO | XZ -> PT | LT -> EZ | PG -> XO | XZ -> PT | ET -> PO | PG -> XO | XG -> LZ
+    ELG x4 + XT =>  XG -> LZ | ET -> PO | PG -> XO | XZ -> PT | LT -> EZ | PG -> XO | XZ -> PT | PG -> XO
+    ELG x4 + XT =>  LT -> EZ | XZ -> PT | PG -> XO | ET -> PO | XG -> LZ | PG -> XO | XZ -> PT | PG -> XO
+    ELG x4 + XT =>  LT -> EZ | XZ -> PT | PG -> XO | XG -> LZ | ET -> PO | PG -> XO | XZ -> PT | PG -> XO
+    ELG x4 + TZ =>  ET -> PO | PG -> XO | XZ -> PT | PG -> XO | LT -> EZ | XZ -> PT | PG -> XO | XG -> LZ
+    ELG x4 + TZ =>  ET -> PO | PG -> XO | XZ -> PT | LT -> EZ | PG -> XO | XZ -> PT | PG -> XO | XG -> LZ
+    ELG x4 + XX =>  XG -> LZ | XZ -> PT | LT -> EZ | PG -> XO | XZ -> PT | ET -> PO | PG -> XO | PG -> XO
+    ELG x4 + XZ =>  XZ -> PT | PG -> XO | ET -> PO | PG -> XO | XG -> LZ | XZ -> PT | LT -> EZ | PG -> XO
+    ELG x4 + XZ =>  XZ -> PT | PG -> XO | ET -> PO | XG -> LZ | PG -> XO | XZ -> PT | LT -> EZ | PG -> XO
+    ELG x4 + XZ =>  XZ -> PT | LT -> EZ | PG -> XO | XZ -> PT | ET -> PO | PG -> XO | XG -> LZ | PG -> XO
 
     PXO + G =>  XG -> LX | PZ -> EG
     PXO + Z =>  PZ -> EG | XG -> LZ
@@ -98,8 +154,8 @@ Of note: both alternatives exhibit flipped polarity, requiring at least one inve
 Solve paths:
 
     LL x2 + PG  =>  PG -> XO | LO -> XT | LT -> EZ | XZ -> PT | ELPX -> GOTZ | LT -> EZ | ET -> PO
-    LL x2 + XO  =>  LO -> TX | LT -> EZ | XZ -> PT | ELPX -> GOTZ | LT -> EZ | EZ -> PO | PG -> XO
-    LL x2 + XO  =>  LO -> TX | LT -> EZ | XZ -> PT | LT -> EZ | ELPX -> GOTZ | ET -> PO | PG -> XO
+    LL x2 + XO  =>  LO -> XT | LT -> EZ | XZ -> PT | ELPX -> GOTZ | LT -> EZ | EZ -> PO | PG -> XO
+    LL x2 + XO  =>  LO -> XT | LT -> EZ | XZ -> PT | LT -> EZ | ELPX -> GOTZ | ET -> PO | PG -> XO
     LL x2 + XT  =>  LT -> EZ | XZ -> PT | ET -> PO | LO -> XT | LT -> EZ | ELPX -> GOTZ | PG -> XO
 
     PP x2 + EG  =>  PG -> XO | EO -> LG | XG -> LZ | PZ -> EG | PG -> XO | ELPX -> GOTZ | LT -> EZ
@@ -121,15 +177,15 @@ Solve paths:
     EP + G  =>  PG -> XO | EO -> LG
     EP + O  =>  EO -> LG | PG -> XO
 
-    TZ x2 + EG  =>  ET -> PO | GOTZ -> ELPX | PZ -> EG | PG -> XO | EO -> GL
-    TZ x2 + EO  =>  ET -> PO | PZ -> EG | EO -> GL | GOTZ -> ELPX | PG -> XO
-    TZ x2 + EO  =>  ET -> PO | PZ -> EG | GOTZ -> ELPX | EO -> GL | PG -> XO
-    TZ x2 + EP  =>  ET -> PO | PZ -> EG | EO -> GL | PG -> XO | GOTZ -> ELPX
-    TZ x2 + EP  =>  ET -> PO | PZ -> EG | PG -> XO | EO -> GL | GOTZ -> ELPX
-    TZ x2 + GO  =>  GOTZ -> ELPX | PZ -> EG | ET -> PO | PG -> XO | EO -> GL
-    TZ x2 + PG  =>  PZ -> EG | ET -> PO | GOTZ -> ELPX | PG -> XO | EO -> GL
-    TZ x2 + PG  =>  PZ -> EG | ET -> PO | PG -> XO | GOTZ -> ELPX | EO -> GL
-    TZ x2 + PO  =>  PZ -> EG | ET -> PO | GOTZ -> ELPX | EO -> GL | PG -> XO
+    TZ x2 + EG  =>  ET -> PO | GOTZ -> ELPX | PZ -> EG | PG -> XO | EO -> LG
+    TZ x2 + EO  =>  ET -> PO | PZ -> EG | EO -> LG | GOTZ -> ELPX | PG -> XO
+    TZ x2 + EO  =>  ET -> PO | PZ -> EG | GOTZ -> ELPX | EO -> LG | PG -> XO
+    TZ x2 + EP  =>  ET -> PO | PZ -> EG | EO -> LG | PG -> XO | GOTZ -> ELPX
+    TZ x2 + EP  =>  ET -> PO | PZ -> EG | PG -> XO | EO -> LG | GOTZ -> ELPX
+    TZ x2 + GO  =>  GOTZ -> ELPX | PZ -> EG | ET -> PO | PG -> XO | EO -> LG
+    TZ x2 + PG  =>  PZ -> EG | ET -> PO | GOTZ -> ELPX | PG -> XO | EO -> LG
+    TZ x2 + PG  =>  PZ -> EG | ET -> PO | PG -> XO | GOTZ -> ELPX | EO -> LG
+    TZ x2 + PO  =>  PZ -> EG | ET -> PO | GOTZ -> ELPX | EO -> LG | PG -> XO
 
 
 ##  Space Injection Data
@@ -142,7 +198,7 @@ Of note: the second alternative exhibits flipped polarity, requiring at least on
 
 Solve paths:
 
-    TODO (first)
+    ZZ x2 + X   =>  XZ -> PT | PZ -> EG | ET -> PO | PG -> XO | XZ -> PT | PZ -> EG | EO -> LG | LO -> XT
 
     EE x2 + PO  =>  EO -> LG | PG -> XO | LO -> XT | ET -> PO | EO -> LG | ELPX -> GOTZ | XZ -> PT
     EE x2 + PT  =>  ET -> PO | EO -> LG | PG -> XO | ELPX -> GOTZ | EO -> LG | LO -> XT | XZ -> PT
@@ -177,14 +233,14 @@ Solve paths:
     TZ x2 + XZ  =>  XZ -> PT | PZ -> EG | ET -> PO | GOTZ -> ELPX | LT -> EZ
 
     GO x2 + LT  =>  LO -> XT | XG -> LZ | GOTZ -> ELPX | LT -> EZ | XZ -> PT
-    GO x2 + LT  =>  LO -> TX | XG -> LZ | LT -> EZ | GOTZ -> ELPX | XZ -> PT
-    GO x2 + LX  =>  LO -> TX | XG -> LZ | LT -> EZ | XZ -> PT | GOTZ -> ELPX
-    GO x2 + LX  =>  LO -> TX | XG -> LZ | XZ -> PT | LT -> EZ | GOTZ -> ELPX
-    GO x2 + LZ  =>  LO -> TX | GOTZ -> ELPX | XG -> LZ | XZ -> PT | LT -> EZ
-    GO x2 + TX  =>  XG -> LZ | GOTZ -> ELPX | LO -> TX | LT -> EZ | XZ -> PT
-    GO x2 + TZ  =>  GOTZ -> ELPX | LO -> TX | XG -> LZ | XZ -> PT | LT -> EZ
-    GO x2 + XZ  =>  XG -> LZ | LO -> TX | GOTZ -> ELPX | XZ -> PT | LT -> EZ
-    GO x2 + XZ  =>  XG -> LZ | LO -> TX | XZ -> PT | GOTZ -> ELPX | LT -> EZ
+    GO x2 + LT  =>  LO -> XT | XG -> LZ | LT -> EZ | GOTZ -> ELPX | XZ -> PT
+    GO x2 + LX  =>  LO -> XT | XG -> LZ | LT -> EZ | XZ -> PT | GOTZ -> ELPX
+    GO x2 + LX  =>  LO -> XT | XG -> LZ | XZ -> PT | LT -> EZ | GOTZ -> ELPX
+    GO x2 + LZ  =>  LO -> XT | GOTZ -> ELPX | XG -> LZ | XZ -> PT | LT -> EZ
+    GO x2 + XT  =>  XG -> LZ | GOTZ -> ELPX | LO -> XT | LT -> EZ | XZ -> PT
+    GO x2 + TZ  =>  GOTZ -> ELPX | LO -> XT | XG -> LZ | XZ -> PT | LT -> EZ
+    GO x2 + XZ  =>  XG -> LZ | LO -> XT | GOTZ -> ELPX | XZ -> PT | LT -> EZ
+    GO x2 + XZ  =>  XG -> LZ | LO -> XT | XZ -> PT | GOTZ -> ELPX | LT -> EZ
 
 
 #   Deep Space Science IV

@@ -50,6 +50,8 @@ pub struct SolverConfiguration {
     pub maximum_catalysts: u8,
     /// The minimum number of catalysts to add.
     pub minimum_catalysts: u8,
+    /// The maximum number of repetitions allowed.
+    pub maximum_repetitions: u8,
     /// The maximum number of recipes in the path from source to target.
     pub maximum_recipes: u8,
 }
@@ -57,13 +59,15 @@ pub struct SolverConfiguration {
 impl Default for SolverConfiguration {
     fn default() -> Self {
         //  Sufficient for all SE recipes.
-        let maximum_catalysts = 8;
+        let maximum_catalysts = 2;
         let minimum_catalysts = 0;
-        let maximum_recipes = 100;
+        let maximum_repetitions = 4;
+        let maximum_recipes = 20;
 
         Self {
             maximum_catalysts,
             minimum_catalysts,
+            maximum_repetitions,
             maximum_recipes,
         }
     }
@@ -206,6 +210,12 @@ impl SolverConfiguration {
 
         start..end
     }
+
+    fn repetitions(&self) -> Range<u8> {
+        let end = self.maximum_repetitions + 1;
+
+        1..end
+    }
 }
 
 impl<R, E> Solver<R, E>
@@ -286,32 +296,42 @@ where
         let mut last_error = None;
 
         for i in catalysts {
-            let searchers = Searcher::generate_searchers(&self.recipes, source, target, count, i, configuration);
+            let repetitions = self.configuration.repetitions();
 
-            let tasks: Vec<_> = searchers.into_iter().map(|searcher| move || searcher.solve()).collect();
+            for n in repetitions {
+                let Some(n) = NonZeroU8::new(n) else {
+                    continue;
+                };
 
-            let mut results = Vec::new();
+                let count = count.saturating_mul(n);
 
-            for result in self.executor.execute(tasks) {
-                match result {
-                    Ok(paths) => results.extend(paths),
-                    Err(e) if e.is_definitive() => return Err(e),
-                    Err(e) if e == ResolutionError::OutsideRecipes => last_error = Some(e),
-                    _ => (),
+                let searchers = Searcher::generate_searchers(&self.recipes, source, target, count, i, configuration);
+
+                let tasks: Vec<_> = searchers.into_iter().map(|searcher| move || searcher.solve()).collect();
+
+                let mut results = Vec::new();
+
+                for result in self.executor.execute(tasks) {
+                    match result {
+                        Ok(paths) => results.extend(paths),
+                        Err(e) if e.is_definitive() => return Err(e),
+                        Err(e) if e == ResolutionError::OutsideRecipes => last_error = Some(e),
+                        _ => (),
+                    }
                 }
+
+                let Some(shortest) = results.iter().map(|p| p.recipes.len()).min() else {
+                    continue;
+                };
+
+                //  Should longer paths still be made available?
+                results.retain(|p| p.recipes.len() == shortest);
+
+                //  Stable output is nice, and definitely not the most costly part anyway...
+                results.sort_unstable();
+
+                return Ok(results);
             }
-
-            let Some(shortest) = results.iter().map(|p| p.recipes.len()).min() else {
-                continue;
-            };
-
-            //  Should longer paths still be made available?
-            results.retain(|p| p.recipes.len() == shortest);
-
-            //  Stable output is nice, and definitely not the most costly part anyway...
-            results.sort_unstable();
-
-            return Ok(results);
         }
 
         //  Didn't find anything, it may be necessary to raise the number of catalysts or the number of recipes in a
@@ -919,6 +939,37 @@ mod tests {
                 catalysts: catalysts_xt,
                 recipes: vec![lt, xz, et, lo, lt, inversion, pg],
             },
+        ];
+
+        let paths = solve(source, target);
+
+        assert_eq!(expected, paths);
+    }
+
+    #[test]
+    fn solve_space_injection_data_a() {
+        const TWO: NonZeroU8 = NonZeroU8::new(2).unwrap();
+
+        let source = "ZZ".parse().unwrap();
+        let target = "GT".parse().unwrap();
+
+        let catalysts = "X".parse().unwrap();
+
+        let xz = "XZ -> PT".parse().unwrap();
+        let pz = "PZ -> EG".parse().unwrap();
+        let et = "ET -> PO".parse().unwrap();
+        let pg = "PG -> XO".parse().unwrap();
+        let eo = "EO -> LG".parse().unwrap();
+        let lo = "LO -> XT".parse().unwrap();
+
+        let expected = vec![
+            Path {
+                source,
+                target,
+                count: TWO,
+                catalysts,
+                recipes: vec![xz, pz, et, pg, xz, pz, eo, lo],
+            }
         ];
 
         let paths = solve(source, target);

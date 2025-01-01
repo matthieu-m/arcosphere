@@ -46,8 +46,8 @@ The recipe itself:
 
 Solve paths:
 
-    LGZ + P  =>  PG -> XO | XZ -> PT
-    LGZ + X  =>  XZ -> PT | GP -> OX
+    LGZ + P =>  PG -> XO | XZ -> PT
+    LGZ + X =>  XZ -> PT | GP -> OX
 
     TODO
 
@@ -59,6 +59,9 @@ The recipe itself:
     E + OT -> E + GZ | P + OT
 
 Solve paths:
+
+    EGZ + P =>  PG -> XO | XZ -> PT
+    EGZ + X =>  XZ -> PT | GP -> OX
 
     TODO
 
@@ -73,6 +76,9 @@ Solve paths:
 
     TODO
 
+    PXO + G =>  XG -> LX | PZ -> EG
+    PXO + Z =>  PZ -> EG | XG -> LZ
+
 
 #   Deep Space Science III
 
@@ -86,7 +92,15 @@ Of note: both alternatives exhibit flipped polarity, requiring at least one inve
 
 Solve paths:
 
-    TODO
+    LL x2 + PG  =>  PG -> XO | LO -> XT | LT -> EZ | XZ -> PT | ELPX -> GOTZ | LT -> EZ | ET -> PO
+    LL x2 + XO  =>  LO -> TX | LT -> EZ | XZ -> PT | ELPX -> GOTZ | LT -> EZ | EZ -> PO | PG -> XO
+    LL x2 + XO  =>  LO -> TX | LT -> EZ | XZ -> PT | LT -> EZ | ELPX -> GOTZ | ET -> PO | PG -> XO
+    LL x2 + XT  =>  LT -> EZ | XZ -> PT | ET -> PO | LO -> XT | LT -> EZ | ELPX -> GOTZ | PG -> XO
+
+    PP x2 + EG  =>  PG -> XO | EO -> LG | XG -> LZ | PZ -> EG | PG -> XO | ELPX -> GOTZ | LT -> EZ
+    PP x2 + EZ  =>  PZ -> EG | PG -> XO | EO -> LG | PG -> XO | ELPX -> GOTZ | XG -> LZ | LT -> EZ
+    PP x2 + EZ  =>  PZ -> EG | PG -> XO | EO -> LG | ELPX -> GOTZ | PG -> XO | XG -> LZ | LT -> EZ
+    PP x2 + LT  =>  LT -> EZ | PZ -> EG | PG -> XO | EO -> LG | PG -> XO | ELPX -> GOTZ | XG -> LZ
 
 
 ##  Space Folding Data
@@ -117,6 +131,11 @@ Solve paths:
 
     TODO
 
+    EE x2 + PO  =>  EO -> LG | PG -> XO | LO -> XT | ET -> PO | EO -> LG | ELPX -> GOTZ | XZ -> PT
+    EE x2 + PT  =>  ET -> PO | EO -> LG | PG -> XO | ELPX -> GOTZ | EO -> LG | LO -> XT | XZ -> PT
+    EE x2 + PT  =>  ET -> PO | EO -> LG | PG -> XO | EO -> LG | ELPX -> GOTZ | LO -> XT | XZ -> PT
+    EE x2 + XZ  =>  XZ -> PT | ET -> PO | EO -> LG | PG -> XO | EO -> LG | ELPX -> GOTZ | LO -> XT
+
 
 ##  Space Warping Data
 
@@ -143,4 +162,11 @@ Of note: no alternative in this one.
 
 Solve paths:
 
-    TODO
+    PXOT + E    =>  EO -> LG | LT -> EZ | XG -> LZ | PZ -> EG
+    PXOT + E    =>  EO -> LG | XZ -> LZ | PZ -> EG | LT -> EZ
+    PXOT + G    =>  XG -> LZ | PZ -> EG | EO -> LG | LT -> EZ
+    PXOT + G    =>  XG -> LZ | LT -> EZ | EO -> LG | PZ -> EG
+    PXOT + L    =>  LT -> EZ | EO -> LG | PZ -> EG | XG -> LZ
+    PXOT + L    =>  LT -> EZ | PZ -> EG | EO -> LG | XG -> LZ
+    PXOT + Z    =>  PZ -> EG | XG -> LZ | EO -> LG | LT -> EZ
+    PXOT + Z    =>  PZ -> EG | EO -> LG | LT -> EZ | XG -> LZ

@@ -59,7 +59,7 @@ impl Default for SolverConfiguration {
         //  Sufficient for all SE recipes.
         let maximum_catalysts = 8;
         let minimum_catalysts = 0;
-        let maximum_recipes = 10;
+        let maximum_recipes = 100;
 
         Self {
             maximum_catalysts,
@@ -807,6 +807,61 @@ mod tests {
                     Recipe::Folding("EO -> LG".parse().unwrap()),
                     Recipe::Folding("PG -> XO".parse().unwrap()),
                 ],
+            },
+        ];
+
+        let paths = solve(source, target);
+
+        assert_eq!(expected, paths);
+    }
+
+    #[test]
+    fn solve_space_dilation_data_a() {
+        const TWO: NonZeroU8 = NonZeroU8::new(2).unwrap();
+
+        let source = "LL".parse().unwrap();
+        let target = "OZ".parse().unwrap();
+
+        let catalysts_pg = "PG".parse().unwrap();
+        let catalysts_xo = "XO".parse().unwrap();
+        let catalysts_xt = "XT".parse().unwrap();
+
+        let inversion = "ELPX -> GOTZ".parse().unwrap();
+
+        let et = "ET -> PO".parse().unwrap();
+        let lo = "LO -> XT".parse().unwrap();
+        let lt = "LT -> EZ".parse().unwrap();
+        let pg = "PG -> XO".parse().unwrap();
+        let xz = "XZ -> PT".parse().unwrap();
+
+        let expected = vec![
+            Path {
+                source,
+                target,
+                count: TWO,
+                catalysts: catalysts_pg,
+                recipes: vec![pg, lo, lt, xz, inversion, lt, et],
+            },
+            Path {
+                source,
+                target,
+                count: TWO,
+                catalysts: catalysts_xo,
+                recipes: vec![lo, lt, xz, inversion, lt, et, pg],
+            },
+            Path {
+                source,
+                target,
+                count: TWO,
+                catalysts: catalysts_xo,
+                recipes: vec![lo, lt, xz, lt, inversion, et, pg],
+            },
+            Path {
+                source,
+                target,
+                count: TWO,
+                catalysts: catalysts_xt,
+                recipes: vec![lt, xz, et, lo, lt, inversion, pg],
             },
         ];
 

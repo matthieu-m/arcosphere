@@ -504,15 +504,33 @@ where
                 return Err(ResolutionError::OutsideCatalysts);
             }
 
-            let searcher = searcher::ForwardSearcher { recipes: &self.recipes };
+            let searcher = searcher::ForwardSearcher::new(&self.recipes);
 
-            if Self::advance(&searcher, &mut forward, &mut in_forward, &mut out_forward, &backward) {
+            let matched = Self::advance(
+                &searcher,
+                source,
+                &mut forward,
+                &mut in_forward,
+                &mut out_forward,
+                &backward,
+            );
+
+            if matched {
                 return Ok(self.stitch(&forward, &backward, out_forward.keys().copied()));
             }
 
-            let searcher = searcher::BackwardSearcher { recipes: &self.recipes };
+            let searcher = searcher::BackwardSearcher::new(&self.recipes);
 
-            if Self::advance(&searcher, &mut backward, &mut in_backward, &mut out_backward, &forward) {
+            let matched = Self::advance(
+                &searcher,
+                target,
+                &mut backward,
+                &mut in_backward,
+                &mut out_backward,
+                &forward,
+            );
+
+            if matched {
                 return Ok(self.stitch(&forward, &backward, out_backward.keys().copied()));
             }
         }
@@ -527,6 +545,7 @@ where
     //  Returns true if a connection has been found.
     fn advance<S, OF>(
         searcher: &S,
+        start: Set<R::Arcosphere>,
         known: &mut FxHashMap<Set<R::Arcosphere>, S::Recipe>,
         inputs: &mut FxHashSet<Set<R::Arcosphere>>,
         outputs: &mut FxHashMap<Set<R::Arcosphere>, S::Recipe>,
@@ -535,7 +554,7 @@ where
     where
         S: searcher::DirectionSearcher<Set = Set<R::Arcosphere>>,
     {
-        searcher.fold(known, inputs, outputs);
+        searcher.fold(start, known, inputs, outputs);
 
         inputs.clear();
         inputs.extend(outputs.keys().copied());
@@ -656,6 +675,7 @@ mod searcher {
         //  Never overriden.
         fn fold(
             &self,
+            start: Self::Set,
             known: &FxHashMap<Self::Set, Self::Recipe>,
             inputs: &FxHashSet<Self::Set>,
             outputs: &mut FxHashMap<Self::Set, Self::Recipe>,
@@ -672,7 +692,11 @@ mod searcher {
 
                     let output = input - from + to;
 
-                    if inputs.contains(&output) || outputs.contains_key(&output) || known.contains_key(&output) {
+                    if output == start
+                        || inputs.contains(&output)
+                        || outputs.contains_key(&output)
+                        || known.contains_key(&output)
+                    {
                         continue;
                     }
 
@@ -682,12 +706,20 @@ mod searcher {
         }
     }
 
-    pub(super) struct ForwardSearcher<'a, R> {
-        pub(super) recipes: &'a R,
+    pub(super) struct ForwardSearcher<'a, R>(BaseSearcher<'a, R>);
+
+    pub(super) struct BackwardSearcher<'a, R>(BaseSearcher<'a, R>);
+
+    impl<'a, R> ForwardSearcher<'a, R> {
+        pub(super) fn new(recipes: &'a R) -> Self {
+            Self(BaseSearcher { recipes })
+        }
     }
 
-    pub(super) struct BackwardSearcher<'a, R> {
-        pub(super) recipes: &'a R,
+    impl<'a, R> BackwardSearcher<'a, R> {
+        pub(super) fn new(recipes: &'a R) -> Self {
+            Self(BaseSearcher { recipes })
+        }
     }
 
     impl<R> DirectionSearcher for ForwardSearcher<'_, R>
@@ -704,10 +736,7 @@ mod searcher {
         }
 
         fn all_recipes(&self) -> impl Iterator<Item = Self::Recipe> {
-            let inversions = self.recipes.inversions().map(Recipe::Inversion);
-            let foldings = self.recipes.foldings().map(Recipe::Folding);
-
-            inversions.chain(foldings)
+            self.0.all_recipes()
         }
 
         fn extract_recipe(&self, recipe: Self::Recipe) -> (Self::Set, Self::Set) {
@@ -729,16 +758,30 @@ mod searcher {
         }
 
         fn all_recipes(&self) -> impl Iterator<Item = Self::Recipe> {
-            let inversions = self.recipes.inversions().map(Recipe::Inversion);
-            let foldings = self.recipes.foldings().map(Recipe::Folding);
-
-            inversions.chain(foldings).map(Reverse)
+            self.0.all_recipes().map(Reverse)
         }
 
         fn extract_recipe(&self, recipe: Self::Recipe) -> (Self::Set, Self::Set) {
             let Reverse(recipe) = recipe;
 
             (recipe.output(), recipe.input())
+        }
+    }
+
+    struct BaseSearcher<'a, R> {
+        recipes: &'a R,
+    }
+
+    impl<'a, R> BaseSearcher<'a, R>
+    where
+        R: RecipeSet,
+        [(); R::Arcosphere::DIMENSION]: Sized,
+    {
+        fn all_recipes(&self) -> impl Iterator<Item = Recipe<R::Arcosphere>> + use<'a, R> {
+            let foldings = self.recipes.foldings().map(Recipe::Folding);
+            let inversions = self.recipes.inversions().map(Recipe::Inversion);
+
+            inversions.chain(foldings)
         }
     }
 } // mod searcher
@@ -875,6 +918,98 @@ mod tests {
                 count: TWO,
                 catalysts: catalysts_xt,
                 recipes: vec![lt, xz, et, lo, lt, inversion, pg],
+            },
+        ];
+
+        let paths = solve(source, target);
+
+        assert_eq!(expected, paths);
+    }
+
+    #[test]
+    fn solve_space_warping_data_b() {
+        const TWO: NonZeroU8 = NonZeroU8::new(2).unwrap();
+
+        let source = "GO".parse().unwrap();
+        let target = "EP".parse().unwrap();
+
+        let catalysts_lt = "LT".parse().unwrap();
+        let catalysts_lx = "LX".parse().unwrap();
+        let catalysts_lz = "LZ".parse().unwrap();
+        let catalysts_tz = "TZ".parse().unwrap();
+        let catalysts_xt = "XT".parse().unwrap();
+        let catalysts_xz = "XZ".parse().unwrap();
+
+        let inversion = "GOTZ -> ELPX".parse().unwrap();
+
+        let lo = "LO -> XT".parse().unwrap();
+        let lt = "LT -> EZ".parse().unwrap();
+        let xg = "XG -> LZ".parse().unwrap();
+        let xz = "XZ -> PT".parse().unwrap();
+
+        let expected = vec![
+            Path {
+                source,
+                target,
+                count: TWO,
+                catalysts: catalysts_lt,
+                recipes: vec![lo, xg, inversion, lt, xz],
+            },
+            Path {
+                source,
+                target,
+                count: TWO,
+                catalysts: catalysts_lt,
+                recipes: vec![lo, xg, lt, inversion, xz],
+            },
+            Path {
+                source,
+                target,
+                count: TWO,
+                catalysts: catalysts_lx,
+                recipes: vec![lo, xg, lt, xz, inversion],
+            },
+            Path {
+                source,
+                target,
+                count: TWO,
+                catalysts: catalysts_lx,
+                recipes: vec![lo, xg, xz, lt, inversion],
+            },
+            Path {
+                source,
+                target,
+                count: TWO,
+                catalysts: catalysts_lz,
+                recipes: vec![lo, inversion, xg, xz, lt],
+            },
+            Path {
+                source,
+                target,
+                count: TWO,
+                catalysts: catalysts_xt,
+                recipes: vec![xg, inversion, lo, lt, xz],
+            },
+            Path {
+                source,
+                target,
+                count: TWO,
+                catalysts: catalysts_tz,
+                recipes: vec![inversion, lo, xg, xz, lt],
+            },
+            Path {
+                source,
+                target,
+                count: TWO,
+                catalysts: catalysts_xz,
+                recipes: vec![xg, lo, inversion, xz, lt],
+            },
+            Path {
+                source,
+                target,
+                count: TWO,
+                catalysts: catalysts_xz,
+                recipes: vec![xg, lo, xz, inversion, lt],
             },
         ];
 

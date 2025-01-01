@@ -10,6 +10,11 @@ present the catalysts in a separate group.
 In some cases, some recipes may be executed in any order. Such recipes are grouped with [].
 
 
+#   Minimum number of Arcospheres
+
+Attempting to isolate each recipe requires an absolute minimum of 98 arcospheres, with a very specific distribution.
+
+
 #   Non-Science
 
 ##  Naquium Tesseract
@@ -28,6 +33,8 @@ Solve paths:
     //  438 other variants, see naquium_tesseract_gop.txt
     GOP x4 + E  =>  EO -> LG | LO -> XT | XG -> LZ | LO -> XT | GOTZ -> ELPX | LT -> EZ | PG -> XO | PG -> XO | EO -> LG | EO -> LG | XG -> LZ | XG -> LZ | PZ -> EG | PG -> XO | EO -> LG | XG -> LZ | PG -> XO | LO -> XT | LT -> EZ
 
+A minimum of 13 arcospheres is required (any catalyst will do), or 14 if picking different catalysts.
+
 
 ##  Naquium Processor
 
@@ -44,6 +51,8 @@ Solve paths:
 
     //  92 other variants, see naquium_processor_lxxxxx.txt
     LXXXXX x2 + G   =>  XG -> LZ | XZ -> PT | LT -> EZ | ELPX -> GOTZ | LT -> EZ | XG -> LZ | EO -> LG | XG -> LZ | XZ -> PT | LT -> EZ | XZ -> PT | LT -> EZ | XZ -> PT | XZ -> PT | ET -> PO | ELPX -> GOTZ | PZ -> EG | PZ -> EG
+
+A minimum of 13 arcospheres is required, with T or Z as catalyst.
 
 
 #   Advanced Science II
@@ -78,6 +87,8 @@ Solve paths:
     XOT x4 + PZ =>  PZ -> EG   XG -> LZ   XZ -> PT   EO -> LG   XG -> LZ   PZ -> EG   XG -> LZ   ET -> PO
     XOT x4 + ZZ =>  XZ -> PT   PZ -> EG   XG -> LZ   ET -> PO   PZ -> EG   XG -> LZ   EO -> LG   XG -> LZ
 
+A minimum of 14 arcospheres is required, with PG or PZ as catalysts.
+
 
 ##  Singularity Application Data
 
@@ -108,6 +119,8 @@ Solve paths:
     POT x4 + XZ =>  PZ -> EG | XG -> LZ | LT -> EZ | PZ -> EG | PZ -> EG | PG -> XO | XG -> LZ | LO -> XT
     POT x4 + XZ =>  PZ -> EG | XG -> LZ | PZ -> EG | PG -> XO | LT -> EZ | PZ -> EG | XG -> LZ | LO -> XT
     POT x4 + ZZ =>  PZ -> EG | PG -> XO | PZ -> EG | XG -> LZ | PZ -> EG | LO -> XT | XG -> LZ | LT -> EZ
+
+A minimum of 14 arcospheres is required, with XG or XZ as catalysts.
 
 
 ##  Timespace Manipulation Data
@@ -140,6 +153,8 @@ Solve paths:
     PXO + G =>  XG -> LX | PZ -> EG
     PXO + Z =>  PZ -> EG | XG -> LZ
 
+A minimum of 14 arcospheres is required, with PZ or XZ as catalysts.
+
 
 #   Deep Space Science III
 
@@ -162,6 +177,8 @@ Solve paths:
     PP x2 + EZ  =>  PZ -> EG | PG -> XO | EO -> LG | PG -> XO | ELPX -> GOTZ | XG -> LZ | LT -> EZ
     PP x2 + EZ  =>  PZ -> EG | PG -> XO | EO -> LG | ELPX -> GOTZ | PG -> XO | XG -> LZ | LT -> EZ
     PP x2 + LT  =>  LT -> EZ | PZ -> EG | PG -> XO | EO -> LG | PG -> XO | ELPX -> GOTZ | XG -> LZ
+
+A minimum of 7 arcospheres is required, with EPG or LXT as catalysts.
 
 
 ##  Space Folding Data
@@ -187,6 +204,8 @@ Solve paths:
     TZ x2 + PG  =>  PZ -> EG | ET -> PO | PG -> XO | GOTZ -> ELPX | EO -> LG
     TZ x2 + PO  =>  PZ -> EG | ET -> PO | GOTZ -> ELPX | EO -> LG | PG -> XO
 
+A minimum of 6 arcospheres is required, with EP or any of [EP]+[GO] as catalysts.
+
 
 ##  Space Injection Data
 
@@ -204,6 +223,8 @@ Solve paths:
     EE x2 + PT  =>  ET -> PO | EO -> LG | PG -> XO | ELPX -> GOTZ | EO -> LG | LO -> XT | XZ -> PT
     EE x2 + PT  =>  ET -> PO | EO -> LG | PG -> XO | EO -> LG | ELPX -> GOTZ | LO -> XT | XZ -> PT
     EE x2 + XZ  =>  XZ -> PT | ET -> PO | EO -> LG | PG -> XO | EO -> LG | ELPX -> GOTZ | LO -> XT
+
+A minimum of 6 arcospheres is required, with XZ as catalysts.
 
 
 ##  Space Warping Data
@@ -242,6 +263,8 @@ Solve paths:
     GO x2 + XZ  =>  XG -> LZ | LO -> XT | GOTZ -> ELPX | XZ -> PT | LT -> EZ
     GO x2 + XZ  =>  XG -> LZ | LO -> XT | XZ -> PT | GOTZ -> ELPX | LT -> EZ
 
+A minimum of 6 arcospheres is required, with LT, LX, or XZ as catalysts.
+
 
 #   Deep Space Science IV
 
@@ -263,3 +286,5 @@ Solve paths:
     PXOT + L    =>  LT -> EZ | PZ -> EG | EO -> LG | XG -> LZ
     PXOT + Z    =>  PZ -> EG | XG -> LZ | EO -> LG | LT -> EZ
     PXOT + Z    =>  PZ -> EG | EO -> LG | LT -> EZ | XG -> LZ
+
+Exactly 5 arcospheres are required, with any of E, G, L, or Z as catalysts.

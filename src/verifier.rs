@@ -95,8 +95,8 @@ where
     pub fn verify(&self, path: &Path<R::Arcosphere>) -> Result<(), VerificationError<R::Arcosphere>> {
         for (index, &recipe) in path.recipes.iter().enumerate() {
             let is_known = match recipe {
-                Recipe::Inversion(inversion) => self.recipes.inversions().into_iter().any(|i| inversion == i),
-                Recipe::Folding(folding) => self.recipes.foldings().into_iter().any(|f| folding == f),
+                Recipe::Inversion(inversion) => self.recipes.inversions().any(|i| inversion == i),
+                Recipe::Folding(folding) => self.recipes.foldings().any(|f| folding == f),
             };
 
             if !is_known {

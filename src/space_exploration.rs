@@ -39,18 +39,18 @@ impl SeRecipeSet {
 impl RecipeSet for SeRecipeSet {
     type Arcosphere = SeArcosphere;
 
-    fn inversions(&self) -> impl IntoIterator<Item = InversionRecipe<Self::Arcosphere>>
+    fn inversions(&self) -> impl Iterator<Item = InversionRecipe<Self::Arcosphere>>
     where
         [(); Self::Arcosphere::DIMENSION]: Sized,
     {
-        self.inversions
+        self.inversions.into_iter()
     }
 
-    fn foldings(&self) -> impl IntoIterator<Item = FoldingRecipe<Self::Arcosphere>>
+    fn foldings(&self) -> impl Iterator<Item = FoldingRecipe<Self::Arcosphere>>
     where
         [(); Self::Arcosphere::DIMENSION]: Sized,
     {
-        self.foldings
+        self.foldings.into_iter()
     }
 }
 

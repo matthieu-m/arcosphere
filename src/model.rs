@@ -54,12 +54,12 @@ pub trait RecipeSet {
     type Arcosphere: Arcosphere;
 
     /// The inversion recipes.
-    fn inversions(&self) -> impl IntoIterator<Item = InversionRecipe<Self::Arcosphere>>
+    fn inversions(&self) -> impl Iterator<Item = InversionRecipe<Self::Arcosphere>>
     where
         [(); Self::Arcosphere::DIMENSION]: Sized;
 
     /// The folding recipes.
-    fn foldings(&self) -> impl IntoIterator<Item = FoldingRecipe<Self::Arcosphere>>
+    fn foldings(&self) -> impl Iterator<Item = FoldingRecipe<Self::Arcosphere>>
     where
         [(); Self::Arcosphere::DIMENSION]: Sized;
 }

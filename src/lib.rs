@@ -17,7 +17,7 @@
 //! let source = "EP".parse()?;
 //! let target = "LX".parse()?;
 //!
-//! let paths = solve(source, target);
+//! let paths = solve(source, target)?;
 //!
 //! assert!(!paths.is_empty());
 //! # Ok(())

@@ -169,7 +169,7 @@ Of note: both alternatives exhibit flipped polarity, requiring at least one inve
 Solve paths:
 
     LL x2 + PG  =>  PG -> XO | LO -> XT | LT -> EZ | XZ -> PT | ELPX -> GOTZ | LT -> EZ | ET -> PO
-    LL x2 + XO  =>  LO -> XT | LT -> EZ | XZ -> PT | ELPX -> GOTZ | LT -> EZ | EZ -> PO | PG -> XO
+    LL x2 + XO  =>  LO -> XT | LT -> EZ | XZ -> PT | ELPX -> GOTZ | LT -> EZ | ET -> PO | PG -> XO
     LL x2 + XO  =>  LO -> XT | LT -> EZ | XZ -> PT | LT -> EZ | ELPX -> GOTZ | ET -> PO | PG -> XO
     LL x2 + XT  =>  LT -> EZ | XZ -> PT | ET -> PO | LO -> XT | LT -> EZ | ELPX -> GOTZ | PG -> XO
 

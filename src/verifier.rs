@@ -8,7 +8,7 @@
 
 use core::{error, fmt};
 
-use crate::model::{ArcosphereFamily, ArcosphereRecipe, ArcosphereSet, StagedPath};
+use crate::model::{ArcosphereFamily, ArcosphereSet, StagedPath};
 
 /// Error which may occur during the verification.
 #[derive(Clone, Copy, Debug)]
@@ -16,14 +16,14 @@ pub enum VerificationError<F>
 where
     F: ArcosphereFamily,
 {
-    /// A recipe could not be applied due to insufficient spheres.
+    /// A stage could not be applied due to insufficient spheres.
     FailedApplication {
-        /// Index of the recipe in the path.
+        /// Index of the stage in the path.
         index: usize,
-        /// Recipe itself.
-        recipe: F::Recipe,
-        /// State prior to attempting to apply the recipe.
+        /// State prior to attempting to apply the stage.
         current: F::Set,
+        /// Expected input of the stage.
+        input: F::Set,
     },
     /// Applying all recipes in order did not result in the expected target.
     FailedTarget {
@@ -43,8 +43,8 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
-            Self::FailedApplication { index, recipe, current } => {
-                write!(f, "failed to apply {recipe} at step {index} on {current}")
+            Self::FailedApplication { index, current, input } => {
+                write!(f, "failed to apply step {index} on {current}: required {input}")
             }
             Self::FailedTarget { result } => write!(f, "failed to reach target, reached {result} instead"),
             Self::FailedCatalysts { remainder } => {
@@ -78,16 +78,18 @@ where
     pub fn verify(&self, staged: &StagedPath<F>) -> Result<(), VerificationError<F>> {
         let mut step = staged.path.source * staged.path.count + staged.path.catalysts;
 
-        for (index, &recipe) in staged.path.recipes.iter().enumerate() {
-            if !recipe.input().is_subset_of(&step) {
+        for (index, stage) in staged.stages().enumerate() {
+            let input = stage.input();
+
+            if !input.is_subset_of(&step) {
                 return Err(VerificationError::FailedApplication {
                     index,
-                    recipe,
                     current: step,
+                    input,
                 });
             }
 
-            step = step - recipe.input() + recipe.output();
+            step = step - input + stage.output();
         }
 
         let target = staged.path.target * staged.path.count;

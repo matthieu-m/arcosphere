@@ -147,7 +147,9 @@ impl Command {
             recipes,
         };
 
-        let path = SeStagedPath { path, stages: vec![] };
+        let stages = (1..(path.recipes.len() as u8)).collect();
+
+        let path = SeStagedPath { path, stages };
 
         Ok(Self::Verify { path })
     }

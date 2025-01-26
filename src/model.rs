@@ -351,6 +351,44 @@ where
     }
 }
 
+/// A stage in the path.
+#[derive(Clone, Copy, Debug)]
+pub struct Stage<'a, R>(pub &'a [R]);
+
+impl<R> Stage<'_, R>
+where
+    R: ArcosphereRecipe,
+{
+    /// Returns the input of the stage, that is the combined input of all recipes in the stage.
+    pub fn input(&self) -> R::Set {
+        self.0.iter().fold(R::Set::default(), |acc, r| acc + r.input())
+    }
+
+    /// Returns the output of the stage, that is the combined output of all recipes in the stage.
+    pub fn output(&self) -> R::Set {
+        self.0.iter().fold(R::Set::default(), |acc, r| acc + r.output())
+    }
+}
+
+//
+//  String operations
+//
+
+impl<R> fmt::Display for Stage<'_, R>
+where
+    R: ArcosphereRecipe,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        for (i, recipe) in self.0.iter().enumerate() {
+            let separator = if i > 0 { " // " } else { "" };
+
+            write!(f, "{separator}{recipe}")?;
+        }
+
+        Ok(())
+    }
+}
+
 /// Possible staged path computed by the solver.
 ///
 /// This path converts source * count + catalysts into target * count + catalysts.
@@ -472,13 +510,13 @@ where
     }
 
     /// Returns an iterator over the stages.
-    pub fn stages(&self) -> impl Iterator<Item = &[F::Recipe]> + use<'_, F> {
+    pub fn stages(&self) -> impl Iterator<Item = Stage<'_, F::Recipe>> + use<'_, F> {
         let start = iter::once(0);
         let end = iter::once(self.path.recipes.len());
 
         let stages = start.chain(self.stages.iter().map(|i| *i as usize)).chain(end);
 
-        stages.map_windows(|&[start, end]| &self.path.recipes[start..end])
+        stages.map_windows(|&[start, end]| Stage(&self.path.recipes[start..end]))
     }
 
     #[allow(clippy::type_complexity)]
@@ -509,13 +547,7 @@ where
         for (i, stage) in self.stages().enumerate() {
             let separator = if i > 0 { " |  " } else { "  ->  " };
 
-            write!(f, "{separator}")?;
-
-            for (j, recipe) in stage.iter().enumerate() {
-                let separator = if j > 0 { " // " } else { "" };
-
-                write!(f, "{separator}{recipe}")?;
-            }
+            write!(f, "{separator}{stage}")?;
         }
 
         Ok(())

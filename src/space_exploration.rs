@@ -1,64 +1,14 @@
 //! Default implementation of the various traits.
 
-use crate::model::{
-    Arcosphere, FoldingRecipe, InversionRecipe, Path, Polarity, Recipe, RecipeParseError, RecipeSet, Set,
-};
+use core::{fmt, str};
+
+use crate::model::{Arcosphere, ArcosphereFamily, ArcosphereRecipe, Path, RecipeParseError, Set};
 
 /// Path for Space Exploration.
-pub type SePath = Path<SeArcosphere>;
-
-/// Recipe for Space Exploration.
-pub type SeRecipe = Recipe<SeArcosphere>;
-
-/// Inversion recipe for Space Exploration.
-pub type SeInversionRecipe = InversionRecipe<SeArcosphere>;
-
-/// Folding recipe for Space Exploration.
-pub type SeFoldingRecipe = FoldingRecipe<SeArcosphere>;
+pub type SePath = Path<SeArcosphereFamily>;
 
 /// Set of arcospheres for Space Exploration.
-pub type SeSet = Set<SeArcosphere>;
-
-/// Space Exploration set of recipes.
-#[derive(Clone, Copy, Debug)]
-pub struct SeRecipeSet {
-    inversions: [SeInversionRecipe; 2],
-    foldings: [SeFoldingRecipe; 8],
-}
-
-impl SeRecipeSet {
-    /// Creates a new recipe set.
-    pub fn new() -> Self {
-        let inversions = Self::create_inversions().expect("correct inversions");
-        let foldings = Self::create_foldings().expect("correct foldings");
-
-        Self { inversions, foldings }
-    }
-}
-
-impl RecipeSet for SeRecipeSet {
-    type Arcosphere = SeArcosphere;
-
-    fn inversions(&self) -> impl Iterator<Item = InversionRecipe<Self::Arcosphere>>
-    where
-        [(); Self::Arcosphere::DIMENSION]: Sized,
-    {
-        self.inversions.into_iter()
-    }
-
-    fn foldings(&self) -> impl Iterator<Item = FoldingRecipe<Self::Arcosphere>>
-    where
-        [(); Self::Arcosphere::DIMENSION]: Sized,
-    {
-        self.foldings.into_iter()
-    }
-}
-
-impl Default for SeRecipeSet {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+pub type SeArcosphereSet = Set<SeArcosphere>;
 
 /// Space Exploration default Arcospheres.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -82,11 +32,21 @@ pub enum SeArcosphere {
     Zeta,
 }
 
-impl Arcosphere for SeArcosphere {
+impl fmt::Display for SeArcosphere {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        use core::fmt::Write;
+
+        f.write_char(self.abbr())
+    }
+}
+
+impl const Arcosphere for SeArcosphere {
     const DIMENSION: usize = 8;
 
     fn from_index(index: usize) -> Self {
-        let index: u8 = index.try_into().expect("index to be in 0..8");
+        assert!(index < Self::DIMENSION);
+
+        let index = index as u8;
 
         match index {
             _ if index == Self::Epsilon as u8 => Self::Epsilon,
@@ -103,16 +63,6 @@ impl Arcosphere for SeArcosphere {
 
     fn into_index(self) -> usize {
         self as u8 as usize
-    }
-
-    fn polarity(&self) -> Polarity {
-        let is_negative = matches!(*self, Self::Epsilon | Self::Lambda | Self::Phi | Self::Xi);
-
-        if is_negative {
-            Polarity::Negative
-        } else {
-            Polarity::Positive
-        }
     }
 
     fn abbr(&self) -> char {
@@ -155,32 +105,137 @@ impl Arcosphere for SeArcosphere {
     }
 }
 
-//
-//  Implementation
-//
+/// Space Exploration default recipes.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[repr(u8)]
+pub enum SeArcosphereRecipe {
+    /// Inversion: γζθω -> ελξφ.
+    GOTZ,
+    /// Inversion: ελξφ -> γζθω.
+    ELPX,
+    /// Folding: εω -> γλ.
+    EO,
+    /// Folding: εθ -> φω.
+    ET,
+    /// Folding: λω -> θξ.
+    LO,
+    /// Folding: θλ -> εζ.
+    LT,
+    /// Folding: γφ -> ξω.
+    PG,
+    /// Folding: ζφ -> γε.
+    PZ,
+    /// Folding: γξ -> ζλ.
+    XG,
+    /// Folding: ζξ -> θφ.
+    XZ,
+}
 
-impl SeRecipeSet {
-    fn create_inversions() -> Result<[SeInversionRecipe; 2], RecipeParseError> {
-        let negatives = "ELPX".parse()?;
-        let positives = "GOTZ".parse()?;
+impl ArcosphereRecipe for SeArcosphereRecipe {
+    const DIMENSION: usize = 10;
 
-        let be_positive = InversionRecipe::new(negatives, positives)?;
-        let be_negative = InversionRecipe::new(positives, negatives)?;
+    type Arcosphere = SeArcosphere;
+    type Set = SeArcosphereSet;
 
-        Ok([be_positive, be_negative])
+    fn from_index(index: usize) -> Self {
+        let index: u8 = index.try_into().expect("index to be in 0..10");
+
+        match index {
+            _ if index == Self::GOTZ as u8 => Self::GOTZ,
+            _ if index == Self::ELPX as u8 => Self::ELPX,
+            _ if index == Self::EO as u8 => Self::EO,
+            _ if index == Self::ET as u8 => Self::ET,
+            _ if index == Self::LO as u8 => Self::LO,
+            _ if index == Self::LT as u8 => Self::LT,
+            _ if index == Self::PG as u8 => Self::PG,
+            _ if index == Self::PZ as u8 => Self::PZ,
+            _ if index == Self::XG as u8 => Self::XG,
+            _ if index == Self::XZ as u8 => Self::XZ,
+            _ => panic!("expect index to be in 0..10"),
+        }
     }
 
-    fn create_foldings() -> Result<[SeFoldingRecipe; 8], RecipeParseError> {
-        let eo = "EO -> LG".parse()?;
-        let et = "ET -> PO".parse()?;
-        let lo = "LO -> XT".parse()?;
-        let lt = "LT -> EZ".parse()?;
-
-        let pg = "PG -> XO".parse()?;
-        let pz = "PZ -> EG".parse()?;
-        let xg = "XG -> LZ".parse()?;
-        let xz = "XZ -> PT".parse()?;
-
-        Ok([eo, et, lo, lt, pg, pz, xg, xz])
+    fn into_index(self) -> usize {
+        self as u8 as usize
     }
+
+    fn input(&self) -> Self::Set {
+        type A = SeArcosphere;
+
+        const GOTZ: Set<A> = Set::from_spheres([A::Gamma, A::Omega, A::Theta, A::Zeta]);
+        const ELPX: Set<A> = Set::from_spheres([A::Epsilon, A::Lambda, A::Phi, A::Xi]);
+        const EO: Set<A> = Set::from_spheres([A::Epsilon, A::Omega]);
+        const ET: Set<A> = Set::from_spheres([A::Epsilon, A::Theta]);
+        const LO: Set<A> = Set::from_spheres([A::Lambda, A::Omega]);
+        const LT: Set<A> = Set::from_spheres([A::Lambda, A::Theta]);
+        const PG: Set<A> = Set::from_spheres([A::Phi, A::Gamma]);
+        const PZ: Set<A> = Set::from_spheres([A::Phi, A::Zeta]);
+        const XG: Set<A> = Set::from_spheres([A::Xi, A::Gamma]);
+        const XZ: Set<A> = Set::from_spheres([A::Xi, A::Zeta]);
+
+        match self {
+            Self::GOTZ => GOTZ,
+            Self::ELPX => ELPX,
+            Self::EO => EO,
+            Self::ET => ET,
+            Self::LO => LO,
+            Self::LT => LT,
+            Self::PG => PG,
+            Self::PZ => PZ,
+            Self::XG => XG,
+            Self::XZ => XZ,
+        }
+    }
+
+    fn output(&self) -> Self::Set {
+        type A = SeArcosphere;
+
+        const ELPX: Set<A> = Set::from_spheres([A::Epsilon, A::Lambda, A::Phi, A::Xi]);
+        const GOTZ: Set<A> = Set::from_spheres([A::Gamma, A::Omega, A::Theta, A::Zeta]);
+        const LG: Set<A> = Set::from_spheres([A::Lambda, A::Gamma]);
+        const PO: Set<A> = Set::from_spheres([A::Phi, A::Omega]);
+        const XT: Set<A> = Set::from_spheres([A::Xi, A::Theta]);
+        const EZ: Set<A> = Set::from_spheres([A::Epsilon, A::Zeta]);
+        const XO: Set<A> = Set::from_spheres([A::Xi, A::Omega]);
+        const EG: Set<A> = Set::from_spheres([A::Epsilon, A::Gamma]);
+        const LZ: Set<A> = Set::from_spheres([A::Lambda, A::Zeta]);
+        const PT: Set<A> = Set::from_spheres([A::Phi, A::Theta]);
+
+        match self {
+            Self::GOTZ => ELPX,
+            Self::ELPX => GOTZ,
+            Self::EO => LG,
+            Self::ET => PO,
+            Self::LO => XT,
+            Self::LT => EZ,
+            Self::PG => XO,
+            Self::PZ => EG,
+            Self::XG => LZ,
+            Self::XZ => PT,
+        }
+    }
+}
+
+impl fmt::Display for SeArcosphereRecipe {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        self.display(f)
+    }
+}
+
+impl str::FromStr for SeArcosphereRecipe {
+    type Err = RecipeParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse(s)
+    }
+}
+
+/// Space exploration default family.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct SeArcosphereFamily;
+
+impl ArcosphereFamily for SeArcosphereFamily {
+    type Arcosphere = SeArcosphere;
+    type Set = SeArcosphereSet;
+    type Recipe = SeArcosphereRecipe;
 }

@@ -8,51 +8,41 @@
 
 use core::{error, fmt};
 
-use crate::model::{Arcosphere, Path, Recipe, RecipeSet, Set};
+use crate::model::{ArcosphereFamily, ArcosphereRecipe, ArcosphereSet, Path};
 
 /// Error which may occur during the verification.
 #[derive(Clone, Copy, Debug)]
-pub enum VerificationError<A>
+pub enum VerificationError<F>
 where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
+    F: ArcosphereFamily,
 {
-    /// A recipe is unknown.
-    UnknownRecipe {
-        /// Index of the recipe in the path.
-        index: usize,
-        /// Recipe itself.
-        recipe: Recipe<A>,
-    },
     /// A recipe could not be applied due to insufficient spheres.
     FailedApplication {
         /// Index of the recipe in the path.
         index: usize,
         /// Recipe itself.
-        recipe: Recipe<A>,
+        recipe: F::Recipe,
         /// State prior to attempting to apply the recipe.
-        current: Set<A>,
+        current: F::Set,
     },
     /// Applying all recipes in order did not result in the expected target.
     FailedTarget {
         /// Result of applying all recipes in order from the source (+ catalysts).
-        result: Set<A>,
+        result: F::Set,
     },
     /// Applying all recipes in order did not recover the catalysts.
     FailedCatalysts {
         /// Remainder after applying all recipes in order from the source (+ catalysts), and removing the target.
-        remainder: Set<A>,
+        remainder: F::Set,
     },
 }
 
-impl<A> fmt::Display for VerificationError<A>
+impl<F> fmt::Display for VerificationError<F>
 where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
+    F: ArcosphereFamily,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
-            Self::UnknownRecipe { index, recipe } => write!(f, "unknown recipe {recipe} at step {index}"),
             Self::FailedApplication { index, recipe, current } => {
                 write!(f, "failed to apply {recipe} at step {index} on {current}")
             }
@@ -64,46 +54,28 @@ where
     }
 }
 
-impl<A> error::Error for VerificationError<A>
-where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
-{
-}
+impl<F> error::Error for VerificationError<F> where F: ArcosphereFamily {}
 
 /// Verifier.
 #[derive(Clone, Debug, Default)]
-pub struct Verifier<R>
+pub struct Verifier<F>
 where
-    R: RecipeSet,
-    [(); R::Arcosphere::DIMENSION]: Sized,
+    F: ArcosphereFamily,
 {
-    recipes: R,
+    _family: F,
 }
 
-impl<R> Verifier<R>
+impl<F> Verifier<F>
 where
-    R: RecipeSet<Arcosphere: PartialEq>,
-    [(); R::Arcosphere::DIMENSION]: Sized,
+    F: ArcosphereFamily,
 {
     /// Creates a new verifier.
-    pub fn new(recipes: R) -> Self {
-        Self { recipes }
+    pub fn new(_family: F) -> Self {
+        Self { _family }
     }
 
     /// Verifies that the path is correct.
-    pub fn verify(&self, path: &Path<R::Arcosphere>) -> Result<(), VerificationError<R::Arcosphere>> {
-        for (index, &recipe) in path.recipes.iter().enumerate() {
-            let is_known = match recipe {
-                Recipe::Inversion(inversion) => self.recipes.inversions().any(|i| inversion == i),
-                Recipe::Folding(folding) => self.recipes.foldings().any(|f| folding == f),
-            };
-
-            if !is_known {
-                return Err(VerificationError::UnknownRecipe { index, recipe });
-            }
-        }
-
+    pub fn verify(&self, path: &Path<F>) -> Result<(), VerificationError<F>> {
         let mut step = path.source * path.count + path.catalysts;
 
         for (index, &recipe) in path.recipes.iter().enumerate() {

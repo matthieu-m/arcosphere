@@ -2,7 +2,10 @@
 
 use core::{error::Error, num::NonZeroU8};
 
-use arcosphere::space_exploration::{SePath, SeRecipe, SeSet};
+use arcosphere::{
+    model::ArcosphereRecipe,
+    space_exploration::{SeArcosphereRecipe, SeArcosphereSet, SePath},
+};
 
 /// Parses the command, returning it if valid.
 pub fn parse<I>(args: I) -> Result<Command, Box<dyn Error>>
@@ -15,8 +18,13 @@ where
 /// Command passed to the binary.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Command {
-    Solve { source: SeSet, target: SeSet },
-    Verify { path: SePath },
+    Solve {
+        source: SeArcosphereSet,
+        target: SeArcosphereSet,
+    },
+    Verify {
+        path: SePath,
+    },
 }
 
 impl Command {
@@ -52,10 +60,10 @@ impl Command {
             return Err("Specify exactly two arguments to solve: SOURCE and TARGET".into());
         };
 
-        let source: SeSet = source
+        let source: SeArcosphereSet = source
             .parse()
             .map_err(|e| format!("Failed to parse SOURCE {source}: {e}"))?;
-        let target: SeSet = target
+        let target: SeArcosphereSet = target
             .parse()
             .map_err(|e| format!("Failed to parse TARGET {target}: {e}"))?;
 
@@ -70,17 +78,17 @@ impl Command {
             return Err("Specify at least two arguments to verify: SOURCE and TARGET".into());
         };
 
-        let source: SeSet = source
+        let source: SeArcosphereSet = source
             .parse()
             .map_err(|e| format!("Failed to parse SOURCE {source}: {e}"))?;
-        let target: SeSet = target
+        let target: SeArcosphereSet = target
             .parse()
             .map_err(|e| format!("Failed to parse TARGET {target}: {e}"))?;
 
         let mut args = args.peekable();
 
         let mut count = ONE;
-        let mut catalysts = SeSet::new();
+        let mut catalysts = SeArcosphereSet::new();
         let mut recipes = Vec::new();
 
         if let Some(argument) = args.peek()
@@ -114,15 +122,15 @@ impl Command {
                 return Err(format!("Failed to parse {n}th recipe, not formatted as: IN -> OUT").into());
             }
 
-            let input: SeSet = input
+            let input: SeArcosphereSet = input
                 .parse()
                 .map_err(|e| format!("Failed to parse IN {input} of {n}th recipe: {e}"))?;
-            let output: SeSet = output
+            let output: SeArcosphereSet = output
                 .parse()
                 .map_err(|e| format!("Failed to parse OUT {output} of {n}th recipe: {e}"))?;
 
-            let recipe =
-                SeRecipe::new(input, output).map_err(|e| format!("Invalid recipe {input} -> {output}: {e}"))?;
+            let recipe = SeArcosphereRecipe::find(input, output)
+                .map_err(|e| format!("Invalid recipe {input} -> {output}: {e}"))?;
 
             recipes.push(recipe);
         }
@@ -141,6 +149,8 @@ impl Command {
 
 #[cfg(test)]
 mod tests {
+    use arcosphere::space_exploration::SeArcosphereRecipe;
+
     use super::*;
 
     #[test]
@@ -169,7 +179,7 @@ mod tests {
                 source: "EP".parse().unwrap(),
                 target: "LX".parse().unwrap(),
                 count: ONE,
-                catalysts: SeSet::new(),
+                catalysts: SeArcosphereSet::new(),
                 recipes: Vec::new(),
             },
         };
@@ -187,10 +197,7 @@ mod tests {
                 target: "LX".parse().unwrap(),
                 count: NonZeroU8::new(2).unwrap(),
                 catalysts: "G".parse().unwrap(),
-                recipes: vec![
-                    SeRecipe::Folding("PG -> XO".parse().unwrap()),
-                    SeRecipe::Folding("EO -> LG".parse().unwrap()),
-                ],
+                recipes: vec![SeArcosphereRecipe::PG, SeArcosphereRecipe::EO],
             },
         };
 

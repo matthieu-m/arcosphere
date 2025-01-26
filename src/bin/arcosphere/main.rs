@@ -15,7 +15,10 @@ mod command;
 
 use std::{env, error::Error};
 
-use arcosphere::space_exploration::{SePath, SeSet};
+use arcosphere::{
+    model::ArcosphereRecipe,
+    space_exploration::{SeArcosphereSet, SePath},
+};
 
 use command::Command;
 
@@ -32,7 +35,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 //  Implementation
 //
 
-fn run_solve(source: SeSet, target: SeSet) -> Result<(), Box<dyn Error>> {
+fn run_solve(source: SeArcosphereSet, target: SeArcosphereSet) -> Result<(), Box<dyn Error>> {
     use std::fmt::Write;
 
     let paths = arcosphere::solve(source, target)?;
@@ -48,8 +51,12 @@ fn run_solve(source: SeSet, target: SeSet) -> Result<(), Box<dyn Error>> {
             write!(&mut line, " +{}", path.catalysts)?;
         }
 
+        let mut separator = "  =>  ";
+
         for recipe in path.recipes {
-            write!(&mut line, "   {} -> {}", recipe.input(), recipe.output())?;
+            write!(&mut line, "{separator}{} -> {}", recipe.input(), recipe.output())?;
+
+            separator = " | ";
         }
 
         println!("{line}");

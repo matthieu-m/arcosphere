@@ -8,11 +8,27 @@ use core::{array, cmp, error, fmt, hash, iter, marker::PhantomData, num::NonZero
 use serde::{Deserialize, Serialize};
 
 /// An arcosphere.
-pub trait Arcosphere: Copy + fmt::Debug {
+#[const_trait]
+pub trait Arcosphere: Copy + fmt::Debug + fmt::Display + Eq + hash::Hash + Ord + PartialEq + PartialOrd {
     /// The total number of arcospheres.
     ///
     /// The existing arcospheres are expected to map to indexes `0..Self::DIMENSION`.
     const DIMENSION: usize;
+
+    /// Returns an array of all arcospheres.
+    fn all() -> [Self; Self::DIMENSION] {
+        let mut array = [Self::from_index(0); Self::DIMENSION];
+
+        let mut i = 1;
+
+        while i < Self::DIMENSION {
+            array[i] = Self::from_index(i);
+
+            i += 1;
+        }
+
+        array
+    }
 
     /// Creates an arcosphere from an index in `0..Self::DIMENSION`.
     ///
@@ -24,9 +40,6 @@ pub trait Arcosphere: Copy + fmt::Debug {
     /// The implementation should ensure that the index lies within `0..Self::DIMENSION`, and uniquely identifies the
     /// given arcosphere.
     fn into_index(self) -> usize;
-
-    /// Returns the polarity of an arcosphere.
-    fn polarity(&self) -> Polarity;
 
     /// Returns the abbreviated name of the arcosphere, eg. 'E'.
     fn abbr(&self) -> char;
@@ -40,38 +53,190 @@ pub trait Arcosphere: Copy + fmt::Debug {
     }
 }
 
-/// A set of recipes: inversions & folding available.
-///
-/// The recipes MUST preserve a number of properties:
-///
-/// -   A recipe MUST preserve the number of arcospheres: N in, N out.
-/// -   An inversion recipe MUST flip the polarities.
-/// -   A folding recipe MUST preserve the polarities.
-///
-/// Those properties are asserted during the construction of the recipes, and a panic will occur should they not hold.
-pub trait RecipeSet {
-    /// The Arcospheres used by the recipes.
+/// A set of arcospheres.
+pub trait ArcosphereSet:
+    Copy
+    + fmt::Debug
+    + Default
+    + fmt::Display
+    + Eq
+    + hash::Hash
+    + iter::IntoIterator<Item = Self::Arcosphere>
+    + Ord
+    + PartialEq
+    + PartialOrd
+    + str::FromStr
+    //  Set operations
+    + ops::AddAssign
+    + ops::Add<Output = Self>
+    + ops::SubAssign
+    + ops::Sub<Output = Self>
+    + ops::MulAssign<u8>
+    + ops::Mul<u8, Output = Self>
+    + ops::MulAssign<NonZeroU8>
+    + ops::Mul<NonZeroU8, Output = Self>
+{
+    /// The type of arcospheres used by the set.
     type Arcosphere: Arcosphere;
 
-    /// The inversion recipes.
-    fn inversions(&self) -> impl Iterator<Item = InversionRecipe<Self::Arcosphere>>
-    where
-        [(); Self::Arcosphere::DIMENSION]: Sized;
+    /// Returns where the set contains any arcosphere.
+    fn is_empty(&self) -> bool;
 
-    /// The folding recipes.
-    fn foldings(&self) -> impl Iterator<Item = FoldingRecipe<Self::Arcosphere>>
-    where
-        [(); Self::Arcosphere::DIMENSION]: Sized;
+    /// Returns the number of spheres in the set.
+    fn len(&self) -> usize;
+
+    /// Returns where a sphere is contained in the set.
+    fn contains(&self, sphere: Self::Arcosphere) -> bool;
+
+    /// Returns whether `self` is a subset of `other`.
+    ///
+    /// A set may be neither a subset nor a superset of another.
+    fn is_subset_of(&self, other: &Self) -> bool;
+
+    /// Returns whether `self` is a superset of `candidate`.
+    ///
+    /// A set may be neither a subset nor a superset of another.
+    fn is_superset_of(&self, other: &Self) -> bool;
+
+    /// Inserts a sphere in the set.
+    fn insert(&mut self, sphere: Self::Arcosphere);
+
+    /// Removes a sphere from the set.
+    ///
+    /// #   Panics
+    ///
+    /// If there is no such sphere in the set.
+    fn remove(&mut self, sphere: Self::Arcosphere);
 }
 
-/// Polarity of an arcosphere.
+/// A recipe, transforming a set of arcospheres into another set.
+pub trait ArcosphereRecipe:
+    Copy + fmt::Debug + fmt::Display + Eq + hash::Hash + Ord + PartialEq + PartialOrd + str::FromStr
+{
+    /// The total number of arcosphere recipes.
+    ///
+    /// The existing arcosphere recipes are expected to map to indexes `0..Self::DIMENSION`.
+    const DIMENSION: usize;
+
+    /// The type of arcospheres used by the recipe.
+    type Arcosphere: Arcosphere;
+    /// The type of set of arcospheres used by the recipe.
+    type Set: ArcosphereSet<Arcosphere = Self::Arcosphere>;
+
+    /// Creates an arcosphere recipe from an index in `0..Self::DIMENSION`.
+    ///
+    /// If `index` lies outside `0..Self::DIMENSION`, the implementation may either panic or return any value.
+    fn from_index(index: usize) -> Self;
+
+    /// Returns the index of an arcosphere recipe.
+    ///
+    /// The implementation should ensure that the index lies within `0..Self::DIMENSION`, and uniquely identifies the
+    /// given arcosphere recipe.
+    fn into_index(self) -> usize;
+
+    /// The input of the recipe.
+    ///
+    /// The number of the arcospheres in the output MUST match the number of arcospheres in the input.
+    fn input(&self) -> Self::Set;
+
+    /// The output of the recipe.
+    ///
+    /// The number of the arcospheres in the output MUST match the number of arcospheres in the input.
+    fn output(&self) -> Self::Set;
+
+    /// Finds the recipe.
+    fn find(input: Self::Set, output: Self::Set) -> Result<Self, RecipeIdentifyError> {
+        (0..Self::DIMENSION)
+            .map(|i| Self::from_index(i))
+            .find(|r| r.input() == input && r.output() == output)
+            .ok_or(RecipeIdentifyError::UnknownRecipe)
+    }
+
+    /// Parses the recipe, for use in implementing `str::FromStr`.
+    fn parse(s: &str) -> Result<Self, RecipeParseError>
+    where
+        RecipeParseError: From<<Self::Set as str::FromStr>::Err>,
+        [(); Self::DIMENSION]: Sized,
+    {
+        let (input, tail) = s.split_once(' ').ok_or(RecipeParseError::IllFormatted)?;
+        let (arrow, output) = tail.split_once(' ').ok_or(RecipeParseError::IllFormatted)?;
+
+        if arrow != "->" {
+            return Err(RecipeParseError::IllFormatted);
+        }
+
+        let input = input.parse()?;
+        let output = output.parse()?;
+
+        Ok(Self::find(input, output)?)
+    }
+
+    /// Formats the recipe, for use in implementing `fmt::Display`.
+    fn display(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{} -> {}", self.input(), self.output())
+    }
+}
+
+/// A family of arcospheres.
+pub trait ArcosphereFamily: Copy + fmt::Debug {
+    /// The Arcospheres used by the recipes.
+    type Arcosphere: Arcosphere;
+    /// The type of set of arcospheres used by the recipe.
+    type Set: ArcosphereSet<Arcosphere = Self::Arcosphere>;
+    /// The type of recipes.
+    type Recipe: ArcosphereRecipe<Arcosphere = Self::Arcosphere, Set = Self::Set>;
+}
+
+/// An erorr which occurs when identifying a recipe.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[repr(u8)]
-pub enum Polarity {
-    /// Polarity of ELPX with the default arcospheres & recipes.
-    Negative,
-    /// Polarity of GOTZ with the default arcospheres & recipes.
-    Positive,
+pub enum RecipeIdentifyError {
+    /// Unknown recipe.
+    UnknownRecipe,
+}
+
+impl fmt::Display for RecipeIdentifyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{self:?}")
+    }
+}
+
+impl error::Error for RecipeIdentifyError {}
+
+/// An error which occurs when parsing a recipe.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum RecipeParseError {
+    /// Format error.
+    IllFormatted,
+    /// The number of arcospheres is not preserved.
+    PreservationError,
+    /// Unknown arcosphere.
+    UnknownArcosphere(char),
+    /// Unknown recipe.
+    UnknownRecipe,
+}
+
+impl fmt::Display for RecipeParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{self:?}")
+    }
+}
+
+impl error::Error for RecipeParseError {}
+
+impl From<RecipeIdentifyError> for RecipeParseError {
+    fn from(value: RecipeIdentifyError) -> RecipeParseError {
+        match value {
+            RecipeIdentifyError::UnknownRecipe => RecipeParseError::UnknownRecipe,
+        }
+    }
+}
+
+impl From<SetParseError> for RecipeParseError {
+    fn from(value: SetParseError) -> RecipeParseError {
+        match value {
+            SetParseError::UnknownArcosphere(c) => RecipeParseError::UnknownArcosphere(c),
+        }
+    }
 }
 
 /// Possible path computed by the solver.
@@ -79,33 +244,31 @@ pub enum Polarity {
 /// This path converts source * count + catalysts into target * count + catalysts.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Path<A>
+pub struct Path<F>
 where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
+    F: ArcosphereFamily,
 {
     /// Source arcospheres.
-    pub source: Set<A>,
+    pub source: F::Set,
     /// Target arcospheres.
-    pub target: Set<A>,
+    pub target: F::Set,
     /// Minimum number of source -> target transformations to perform.
     ///
     /// When inversions kick in, it may be necessary to batch the conversions for the number of polarity flips to line
     /// up. Thus, while in trivial cases count is 1, with inversions it may be greater.
     pub count: NonZeroU8,
     /// Catalysts to use for this path.
-    pub catalysts: Set<A>,
+    pub catalysts: F::Set,
     /// Recipes to use, in order.
-    pub recipes: Vec<Recipe<A>>,
+    pub recipes: Vec<F::Recipe>,
 }
 
-impl<A> Path<A>
+impl<F> Path<F>
 where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
+    F: ArcosphereFamily,
 {
     #[allow(clippy::type_complexity)]
-    fn tuplify(&self) -> (Set<A>, Set<A>, NonZeroU8, Set<A>, &[Recipe<A>]) {
+    fn tuplify(&self) -> (F::Set, F::Set, NonZeroU8, F::Set, &[F::Recipe]) {
         (self.source, self.target, self.count, self.catalysts, &self.recipes)
     }
 }
@@ -114,27 +277,20 @@ where
 //  Identity operations
 //
 
-impl<A> cmp::PartialEq for Path<A>
+impl<F> cmp::PartialEq for Path<F>
 where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
+    F: ArcosphereFamily,
 {
     fn eq(&self, other: &Self) -> bool {
         self.tuplify() == other.tuplify()
     }
 }
 
-impl<A> cmp::Eq for Path<A>
-where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
-{
-}
+impl<F> cmp::Eq for Path<F> where F: ArcosphereFamily {}
 
-impl<A> hash::Hash for Path<A>
+impl<F> hash::Hash for Path<F>
 where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
+    F: ArcosphereFamily,
 {
     fn hash<H>(&self, state: &mut H)
     where
@@ -148,403 +304,23 @@ where
 //  Order operations
 //
 
-impl<A> cmp::PartialOrd for Path<A>
+impl<F> cmp::PartialOrd for Path<F>
 where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
+    F: ArcosphereFamily,
 {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<A> cmp::Ord for Path<A>
+impl<F> cmp::Ord for Path<F>
 where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
+    F: ArcosphereFamily,
 {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.tuplify().cmp(&other.tuplify())
     }
 }
-
-/// A recipe, either inversion or folding.
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum Recipe<A>
-where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
-{
-    /// A folding recipe.
-    Folding(FoldingRecipe<A>),
-    /// An inversion recipe.
-    Inversion(InversionRecipe<A>),
-}
-
-impl<A> Recipe<A>
-where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
-{
-    /// Creates a new recipe.
-    ///
-    /// Returns an error:
-    ///
-    /// -   if the recipe is neither an inversion nor a folding recipe.
-    pub fn new(input: Set<A>, output: Set<A>) -> Result<Self, RecipeError> {
-        if input.count_negatives() == output.count_negatives() {
-            FoldingRecipe::new(input, output).map(Recipe::Folding)
-        } else {
-            InversionRecipe::new(input, output).map(Recipe::Inversion)
-        }
-    }
-
-    /// Returns a copy of the input set.
-    pub fn input(&self) -> Set<A> {
-        match self {
-            Self::Folding(this) => this.input(),
-            Self::Inversion(this) => this.input(),
-        }
-    }
-
-    /// Returns a copy of the output set.
-    pub fn output(&self) -> Set<A> {
-        match self {
-            Self::Folding(this) => this.output(),
-            Self::Inversion(this) => this.output(),
-        }
-    }
-}
-
-/// A folding recipe.
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct FoldingRecipe<A>
-where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
-{
-    /// The input of the recipe.
-    input: Set<A>,
-    /// The output of the recipe.
-    output: Set<A>,
-}
-
-impl<A> FoldingRecipe<A>
-where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
-{
-    /// Creates a new folding recipe.
-    ///
-    /// Returns an error:
-    ///
-    /// -   if the number of arcospheres are not preserved.
-    /// -   if the polarities are not preserved.
-    pub fn new(input: Set<A>, output: Set<A>) -> Result<Self, RecipeError> {
-        if input.len() != output.len() {
-            return Err(RecipeError::PreservationError);
-        }
-
-        if input.count_negatives() != output.count_negatives() {
-            return Err(RecipeError::PolarityError);
-        }
-
-        Ok(Self { input, output })
-    }
-
-    /// Returns a copy of the input set.
-    pub fn input(&self) -> Set<A> {
-        self.input
-    }
-
-    /// Returns a copy of the output set.
-    pub fn output(&self) -> Set<A> {
-        self.output
-    }
-}
-
-/// An inversion recipe.
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct InversionRecipe<A>
-where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
-{
-    /// The input of the recipe.
-    input: Set<A>,
-    /// The output of the recipe.
-    output: Set<A>,
-}
-
-impl<A> InversionRecipe<A>
-where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
-{
-    /// Creates a new recipe.
-    ///
-    /// Returns an error:
-    ///
-    /// -   if the number of arcospheres are not preserved.
-    /// -   if the polarities are not flipped.
-    pub fn new(input: Set<A>, output: Set<A>) -> Result<Self, RecipeError> {
-        if input.len() != output.len() {
-            return Err(RecipeError::PreservationError);
-        }
-
-        if input.count_negatives() == output.count_negatives() {
-            return Err(RecipeError::PolarityError);
-        }
-
-        Ok(Self { input, output })
-    }
-
-    /// Returns the polarity of the recipe.
-    ///
-    /// An inversion recipe of positive polarity results in _more_ positive arcospheres in its output, and vice-versa.
-    pub fn polarity(&self) -> Polarity {
-        if self.input.count_negatives() > self.output.count_negatives() {
-            Polarity::Positive
-        } else {
-            Polarity::Negative
-        }
-    }
-
-    /// Returns a copy of the input set.
-    pub fn input(&self) -> Set<A> {
-        self.input
-    }
-
-    /// Returns a copy of the output set.
-    pub fn output(&self) -> Set<A> {
-        self.output
-    }
-}
-
-/// An error in creating a recipe.
-#[derive(Clone, Copy, Debug)]
-pub enum RecipeError {
-    /// The number of arcospheres is not preserved.
-    PreservationError,
-    /// The polarities of the arcospheres are changed in an unexpected way.
-    PolarityError,
-}
-
-impl fmt::Display for RecipeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{self:?}")
-    }
-}
-
-impl error::Error for RecipeError {}
-
-//
-//  Visualization
-//
-
-impl<A> fmt::Display for Recipe<A>
-where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        format_recipe(f, self.input(), self.output())
-    }
-}
-
-impl<A> fmt::Display for FoldingRecipe<A>
-where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        format_recipe(f, self.input(), self.output())
-    }
-}
-
-impl<A> fmt::Display for InversionRecipe<A>
-where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        format_recipe(f, self.input(), self.output())
-    }
-}
-
-impl<A> str::FromStr for Recipe<A>
-where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
-{
-    type Err = RecipeParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (input, output) = parse_recipe(s)?;
-
-        Ok(Self::new(input, output)?)
-    }
-}
-
-impl<A> str::FromStr for FoldingRecipe<A>
-where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
-{
-    type Err = RecipeParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (input, output) = parse_recipe(s)?;
-
-        Ok(Self::new(input, output)?)
-    }
-}
-
-impl<A> str::FromStr for InversionRecipe<A>
-where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
-{
-    type Err = RecipeParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (input, output) = parse_recipe(s)?;
-
-        Ok(Self::new(input, output)?)
-    }
-}
-
-//  Helper to format a recipe.
-fn format_recipe<A>(f: &mut fmt::Formatter<'_>, input: Set<A>, output: Set<A>) -> Result<(), fmt::Error>
-where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
-{
-    write!(f, "{input} -> {output}")
-}
-
-//  Helper to parse a recipe.
-fn parse_recipe<A>(s: &str) -> Result<(Set<A>, Set<A>), RecipeParseError>
-where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
-{
-    let (input, tail) = s.split_once(' ').ok_or(RecipeParseError::IllFormatted)?;
-    let (arrow, output) = tail.split_once(' ').ok_or(RecipeParseError::IllFormatted)?;
-
-    if arrow != "->" {
-        return Err(RecipeParseError::IllFormatted);
-    }
-
-    let input = input.parse()?;
-    let output = output.parse()?;
-
-    Ok((input, output))
-}
-
-/// An error which occurs when parsing a recipe.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum RecipeParseError {
-    /// Format error.
-    IllFormatted,
-    /// The number of arcospheres is not preserved.
-    PreservationError,
-    /// The polarities of the arcospheres are changed in an unexpected way.
-    PolarityError,
-    /// Unknown arcosphere.
-    Unknown(char),
-}
-
-impl fmt::Display for RecipeParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{self:?}")
-    }
-}
-
-impl error::Error for RecipeParseError {}
-
-impl From<RecipeError> for RecipeParseError {
-    fn from(value: RecipeError) -> RecipeParseError {
-        match value {
-            RecipeError::PreservationError => RecipeParseError::PreservationError,
-            RecipeError::PolarityError => RecipeParseError::PolarityError,
-        }
-    }
-}
-
-impl From<SetParseError> for RecipeParseError {
-    fn from(value: SetParseError) -> RecipeParseError {
-        match value {
-            SetParseError::Unknown(c) => RecipeParseError::Unknown(c),
-        }
-    }
-}
-
-//
-//  Identity operations
-//
-
-macro_rules! recipe_impl_eq_hash_ord {
-    ($recipe:ident) => {
-        impl<A> cmp::PartialEq for $recipe<A>
-        where
-            A: Arcosphere,
-            [(); A::DIMENSION]: Sized,
-        {
-            fn eq(&self, other: &Self) -> bool {
-                self.input() == other.input() && self.output() == other.output()
-            }
-        }
-
-        impl<A> cmp::Eq for $recipe<A>
-        where
-            A: Arcosphere,
-            [(); A::DIMENSION]: Sized,
-        {
-        }
-
-        impl<A> hash::Hash for $recipe<A>
-        where
-            A: Arcosphere,
-            [(); A::DIMENSION]: Sized,
-        {
-            fn hash<H>(&self, state: &mut H)
-            where
-                H: hash::Hasher,
-            {
-                self.input().hash(state);
-                self.output().hash(state);
-            }
-        }
-
-        impl<A> cmp::PartialOrd for $recipe<A>
-        where
-            A: Arcosphere,
-            [(); A::DIMENSION]: Sized,
-        {
-            fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-                Some(self.cmp(other))
-            }
-        }
-
-        impl<A> cmp::Ord for $recipe<A>
-        where
-            A: Arcosphere,
-            [(); A::DIMENSION]: Sized,
-        {
-            fn cmp(&self, other: &Self) -> cmp::Ordering {
-                self.input().cmp(&other.input())
-            }
-        }
-    };
-}
-
-recipe_impl_eq_hash_ord!(Recipe);
-recipe_impl_eq_hash_ord!(FoldingRecipe);
-recipe_impl_eq_hash_ord!(InversionRecipe);
 
 /// A set of arcosphere.
 ///
@@ -565,7 +341,7 @@ where
     [(); A::DIMENSION]: Sized,
 {
     /// Creates an empty set.
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         let _marker = PhantomData;
 
         Self {
@@ -575,13 +351,34 @@ where
     }
 
     /// Creates a full set.
-    pub fn full() -> Self {
+    pub const fn full() -> Self {
         let _marker = PhantomData;
 
         Self {
             spheres: [1; A::DIMENSION],
             _marker,
         }
+    }
+
+    /// Creates a set from a list of spheres.
+    pub const fn from_spheres<const N: usize>(spheres: [A; N]) -> Self
+    where
+        A: ~const Arcosphere,
+    {
+        let mut this = Self::new();
+
+        let mut i = 0;
+
+        while i < spheres.len() {
+            let sphere = spheres[i];
+            i += 1;
+
+            let index = sphere.into_index();
+
+            this.spheres[index] += 1;
+        }
+
+        this
     }
 
     /// Returns where the set contains any arcosphere.
@@ -642,58 +439,6 @@ where
     }
 }
 
-impl<A> Set<A>
-where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
-{
-    /// Returns the number of spheres with negative polarity in the set.
-    pub fn count_negatives(&self) -> usize {
-        self.negatives().len()
-    }
-
-    /// Returns the number of spheres with positive polarity in the set.
-    pub fn count_positives(&self) -> usize {
-        self.positives().len()
-    }
-
-    /// Returns the number of spheres with the given polarity.
-    pub fn count_polarity(&self, polarity: Polarity) -> usize {
-        self.polarized(polarity).len()
-    }
-
-    /// Returns the subset of spheres with negative polarity.
-    pub fn negatives(&self) -> Self {
-        self.polarized(Polarity::Negative)
-    }
-
-    /// Returns the subset of spheres with positive polarity.
-    pub fn positives(&self) -> Self {
-        self.polarized(Polarity::Positive)
-    }
-
-    /// Returns the subset of spheres with the given polarity.
-    pub fn polarized(&self, polarity: Polarity) -> Self {
-        let mut spheres = self.spheres;
-
-        spheres.iter_mut().enumerate().for_each(|(index, n)| {
-            if *n == 0 {
-                return;
-            }
-
-            if A::from_index(index).polarity() == polarity {
-                return;
-            }
-
-            *n = 0;
-        });
-
-        let _marker = PhantomData;
-
-        Self { spheres, _marker }
-    }
-}
-
 impl<A> Default for Set<A>
 where
     A: Arcosphere,
@@ -701,6 +446,42 @@ where
 {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl<A> ArcosphereSet for Set<A>
+where
+    A: Arcosphere,
+    [(); A::DIMENSION]: Sized,
+{
+    type Arcosphere = A;
+
+    fn is_empty(&self) -> bool {
+        self.is_empty()
+    }
+
+    fn len(&self) -> usize {
+        self.len()
+    }
+
+    fn contains(&self, sphere: Self::Arcosphere) -> bool {
+        self.contains(sphere)
+    }
+
+    fn is_subset_of(&self, other: &Self) -> bool {
+        self.is_subset_of(other)
+    }
+
+    fn is_superset_of(&self, other: &Self) -> bool {
+        self.is_superset_of(other)
+    }
+
+    fn insert(&mut self, sphere: Self::Arcosphere) {
+        self.insert(sphere)
+    }
+
+    fn remove(&mut self, sphere: Self::Arcosphere) {
+        self.remove(sphere)
     }
 }
 
@@ -755,7 +536,10 @@ where
         let mut result = Set::new();
 
         for c in s.chars() {
-            let index = mapping.iter().position(|m| *m == c).ok_or(SetParseError::Unknown(c))?;
+            let index = mapping
+                .iter()
+                .position(|m| *m == c)
+                .ok_or(SetParseError::UnknownArcosphere(c))?;
 
             result.insert(A::from_index(index));
         }
@@ -768,7 +552,7 @@ where
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum SetParseError {
     /// Unknown arcosphere.
-    Unknown(char),
+    UnknownArcosphere(char),
 }
 
 impl fmt::Display for SetParseError {
@@ -937,22 +721,6 @@ where
 //
 //  Set operations
 //
-
-/// Subset trait.
-pub trait IsSubsetOf {
-    /// Is `self` a subset of `other`?
-    fn is_subset_of(&self, other: &Self) -> bool;
-}
-
-impl<A> IsSubsetOf for Set<A>
-where
-    A: Arcosphere,
-    [(); A::DIMENSION]: Sized,
-{
-    fn is_subset_of(&self, other: &Self) -> bool {
-        self.is_subset_of(other)
-    }
-}
 
 impl<A> ops::AddAssign for Set<A>
 where

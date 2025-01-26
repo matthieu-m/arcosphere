@@ -25,6 +25,7 @@
 //! ```
 
 //  Features
+#![feature(const_trait_impl)]
 #![feature(generic_const_exprs)]
 #![feature(precise_capturing_in_traits)]
 #![feature(strict_overflow_ops)]
@@ -38,21 +39,21 @@ pub mod solver;
 pub mod space_exploration;
 pub mod verifier;
 
-use model::{Path, Set};
+use model::Path;
+
 use solver::{ResolutionError, Solver};
-use space_exploration::{SeArcosphere, SeRecipeSet};
+use space_exploration::{SeArcosphereFamily, SeArcosphereSet};
 use verifier::{VerificationError, Verifier};
 
 /// Default Space Exploration solve function.
-pub fn solve(input: Set<SeArcosphere>, output: Set<SeArcosphere>) -> Result<Vec<Path<SeArcosphere>>, ResolutionError> {
-    let recipes = SeRecipeSet::new();
-
-    Solver::<_, executor::DefaultExecutor>::new(recipes).solve(input, output)
+pub fn solve(
+    input: SeArcosphereSet,
+    output: SeArcosphereSet,
+) -> Result<Vec<Path<SeArcosphereFamily>>, ResolutionError> {
+    Solver::<_, executor::DefaultExecutor>::new(SeArcosphereFamily).solve(input, output)
 }
 
 /// Default Space Exploration verify function.
-pub fn verify(path: &Path<SeArcosphere>) -> Result<(), VerificationError<SeArcosphere>> {
-    let recipes = SeRecipeSet::new();
-
-    Verifier::new(recipes).verify(path)
+pub fn verify(path: &Path<SeArcosphereFamily>) -> Result<(), VerificationError<SeArcosphereFamily>> {
+    Verifier::new(SeArcosphereFamily).verify(path)
 }

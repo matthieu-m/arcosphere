@@ -68,24 +68,24 @@ Solve paths:
     LGZ + P =>  PG -> XO | XZ -> PT
     LGZ + X =>  XZ -> PT | PG -> XO
 
-    XOT x4 + EG =>  XG -> LZ   ET -> PO   PZ -> EG   EO -> LG   XG -> LZ   XZ -> PT   XG -> LZ   PZ -> EG
-    XOT x4 + EG =>  XG -> LZ   ET -> PO   PZ -> EG   XG -> LZ   XZ -> PT   EO -> LG   XG -> LZ   PZ -> EG
-    XOT x4 + EG =>  XG -> LZ   XZ -> PT   EO -> LG   XG -> LZ   PZ -> EG   XG -> LZ   ET -> PO   PZ -> EG
-    XOT x4 + EP =>  EO -> LG   XG -> LZ   PZ -> EG   ET -> PO   XG -> LZ   PZ -> EG   XG -> LZ   XZ -> PT
-    XOT x4 + EP =>  EO -> LG   XG -> LZ   PZ -> EG   XG -> LZ   ET -> PO   PZ -> EG   XG -> LZ   XZ -> PT
-    XOT x4 + EZ =>  EO -> LG   XG -> LZ   XZ -> PT   PZ -> EG   XG -> LZ   ET -> PO   PZ -> EG   XG -> LZ
-    XOT x4 + EZ =>  ET -> PO   PZ -> EG   EO -> LG   XG -> LZ   XZ -> PT   XG -> LZ   PZ -> EG   XG -> LZ
-    XOT x4 + EZ =>  ET -> PO   PZ -> EG   XG -> LZ   XZ -> PT   EO -> LG   XG -> LZ   PZ -> EG   XG -> LZ
-    XOT x4 + GG =>  XG -> LZ   XG -> LZ   XZ -> PT   PZ -> EG   XG -> LZ   ET -> PO   PZ -> EG   EO -> LG
-    XOT x4 + PG =>  XG -> LZ   PZ -> EG   XG -> LZ   EO -> LG   XZ -> PT   XG -> LZ   PZ -> EG   ET -> PO
-    XOT x4 + PG =>  XG -> LZ   PZ -> EG   XG -> LZ   ET -> PO   PZ -> EG   XG -> LZ   XZ -> PT   EO -> LG
-    XOT x4 + PG =>  XG -> LZ   PZ -> EG   XG -> LZ   XZ -> PT   EO -> LG   XG -> LZ   PZ -> EG   ET -> PO
-    XOT x4 + GZ =>  XG -> LZ   XZ -> PT   PZ -> EG   ET -> PO   XG -> LZ   PZ -> EG   XG -> LZ   EO -> LG
-    XOT x4 + GZ =>  XG -> LZ   XZ -> PT   PZ -> EG   XG -> LZ   ET -> PO   PZ -> EG   XG -> LZ   EO -> LG
-    XOT x4 + PZ =>  PZ -> EG   XG -> LZ   EO -> LG   XG -> LZ   XZ -> PT   PZ -> EG   XG -> LZ   ET -> PO
-    XOT x4 + PZ =>  PZ -> EG   XG -> LZ   ET -> PO   PZ -> EG   EO -> LG   XG -> LZ   XZ -> PT   XG -> LZ
-    XOT x4 + PZ =>  PZ -> EG   XG -> LZ   XZ -> PT   EO -> LG   XG -> LZ   PZ -> EG   XG -> LZ   ET -> PO
-    XOT x4 + ZZ =>  XZ -> PT   PZ -> EG   XG -> LZ   ET -> PO   PZ -> EG   XG -> LZ   EO -> LG   XG -> LZ
+    XOT x4 + EG =>  XG -> LZ | ET -> PO | PZ -> EG | EO -> LG | XG -> LZ | XZ -> PT | XG -> LZ | PZ -> EG
+    XOT x4 + EG =>  XG -> LZ | ET -> PO | PZ -> EG | XG -> LZ | XZ -> PT | EO -> LG | XG -> LZ | PZ -> EG
+    XOT x4 + EG =>  XG -> LZ | XZ -> PT | EO -> LG | XG -> LZ | PZ -> EG | XG -> LZ | ET -> PO | PZ -> EG
+    XOT x4 + EP =>  EO -> LG | XG -> LZ | PZ -> EG | ET -> PO | XG -> LZ | PZ -> EG | XG -> LZ | XZ -> PT
+    XOT x4 + EP =>  EO -> LG | XG -> LZ | PZ -> EG | XG -> LZ | ET -> PO | PZ -> EG | XG -> LZ | XZ -> PT
+    XOT x4 + EZ =>  EO -> LG | XG -> LZ | XZ -> PT | PZ -> EG | XG -> LZ | ET -> PO | PZ -> EG | XG -> LZ
+    XOT x4 + EZ =>  ET -> PO | PZ -> EG | EO -> LG | XG -> LZ | XZ -> PT | XG -> LZ | PZ -> EG | XG -> LZ
+    XOT x4 + EZ =>  ET -> PO | PZ -> EG | XG -> LZ | XZ -> PT | EO -> LG | XG -> LZ | PZ -> EG | XG -> LZ
+    XOT x4 + GG =>  XG -> LZ | XG -> LZ | XZ -> PT | PZ -> EG | XG -> LZ | ET -> PO | PZ -> EG | EO -> LG
+    XOT x4 + PG =>  XG -> LZ | PZ -> EG | XG -> LZ | EO -> LG | XZ -> PT | XG -> LZ | PZ -> EG | ET -> PO
+    XOT x4 + PG =>  XG -> LZ | PZ -> EG | XG -> LZ | ET -> PO | PZ -> EG | XG -> LZ | XZ -> PT | EO -> LG
+    XOT x4 + PG =>  XG -> LZ | PZ -> EG | XG -> LZ | XZ -> PT | EO -> LG | XG -> LZ | PZ -> EG | ET -> PO
+    XOT x4 + GZ =>  XG -> LZ | XZ -> PT | PZ -> EG | ET -> PO | XG -> LZ | PZ -> EG | XG -> LZ | EO -> LG
+    XOT x4 + GZ =>  XG -> LZ | XZ -> PT | PZ -> EG | XG -> LZ | ET -> PO | PZ -> EG | XG -> LZ | EO -> LG
+    XOT x4 + PZ =>  PZ -> EG | XG -> LZ | EO -> LG | XG -> LZ | XZ -> PT | PZ -> EG | XG -> LZ | ET -> PO
+    XOT x4 + PZ =>  PZ -> EG | XG -> LZ | ET -> PO | PZ -> EG | EO -> LG | XG -> LZ | XZ -> PT | XG -> LZ
+    XOT x4 + PZ =>  PZ -> EG | XG -> LZ | XZ -> PT | EO -> LG | XG -> LZ | PZ -> EG | XG -> LZ | ET -> PO
+    XOT x4 + ZZ =>  XZ -> PT | PZ -> EG | XG -> LZ | ET -> PO | PZ -> EG | XG -> LZ | EO -> LG | XG -> LZ
 
 A minimum of 14 arcospheres is required, with PG or PZ as catalysts.
 

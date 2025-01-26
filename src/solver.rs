@@ -6,8 +6,8 @@ use fxhash::{FxHashMap, FxHashSet};
 
 use crate::{
     executor::Executor,
-    model::{Arcosphere, Path, Polarity, Recipe, RecipeSet, Set},
-    space_exploration::SeRecipeSet,
+    model::{Arcosphere, ArcosphereFamily, ArcosphereRecipe, ArcosphereSet, Path},
+    space_exploration::SeArcosphereFamily,
 };
 
 /// Error which may occur during the search for a solution.
@@ -75,12 +75,11 @@ impl Default for SolverConfiguration {
 
 /// Solver.
 #[derive(Clone, Debug, Default)]
-pub struct Solver<R, E>
+pub struct Solver<F, E>
 where
-    R: RecipeSet,
-    [(); R::Arcosphere::DIMENSION]: Sized,
+    F: ArcosphereFamily,
 {
-    recipes: R,
+    family: F,
     executor: E,
     configuration: SolverConfiguration,
 }
@@ -89,13 +88,12 @@ where
 //  Configuration
 //
 
-impl<R, E> Solver<R, E>
+impl<F, E> Solver<F, E>
 where
-    R: RecipeSet,
-    [(); R::Arcosphere::DIMENSION]: Sized,
+    F: ArcosphereFamily,
 {
-    /// Creates a new solver based on a set of recipes.
-    pub fn new(recipes: R) -> Self
+    /// Creates a new solver based on a family of arcospheres.
+    pub fn new(family: F) -> Self
     where
         E: Default,
     {
@@ -103,7 +101,7 @@ where
         let configuration = SolverConfiguration::default();
 
         Self {
-            recipes,
+            family,
             executor,
             configuration,
         }
@@ -117,13 +115,13 @@ where
     }
 
     /// Sets the executor.
-    pub fn with_executor<OE>(self, executor: OE) -> Solver<R, OE> {
+    pub fn with_executor<OE>(self, executor: OE) -> Solver<F, OE> {
         let Solver {
-            recipes, configuration, ..
+            family, configuration, ..
         } = self;
 
         Solver {
-            recipes,
+            family,
             executor,
             configuration,
         }
@@ -135,7 +133,7 @@ where
 //
 
 /// Solver for default Space Exploration.
-pub type SeSolver<E> = Solver<SeRecipeSet, E>;
+pub type SeSolver<E> = Solver<SeArcosphereFamily, E>;
 
 impl<E> SeSolver<E> {
     /// Creates a new solver for space exploration.
@@ -151,11 +149,10 @@ impl<E> SeSolver<E> {
 //  Solving!
 //
 
-impl<R, E> Solver<R, E>
+impl<F, E> Solver<F, E>
 where
-    R: RecipeSet<Arcosphere: Send> + Clone + Send,
+    F: ArcosphereFamily<Arcosphere: Send, Set: Send, Recipe: Send> + Send,
     E: Executor,
-    [(); R::Arcosphere::DIMENSION]: Sized,
 {
     /// Looks for all possible recipe paths from `source` to `target` with a minimum number of catalysts.
     ///
@@ -164,11 +161,7 @@ where
     ///
     /// If the solver does not return any solution, then raising either the number of catalysts or the number of recipes
     /// may allow it to find further solutions.
-    pub fn solve(
-        &self,
-        source: Set<R::Arcosphere>,
-        target: Set<R::Arcosphere>,
-    ) -> Result<Vec<Path<R::Arcosphere>>, ResolutionError> {
+    pub fn solve(&self, source: F::Set, target: F::Set) -> Result<Vec<Path<F>>, ResolutionError> {
         //  Special case: impossible.
 
         if source.len() != target.len() {
@@ -182,18 +175,30 @@ where
                 source,
                 target,
                 count: ONE,
-                catalysts: Set::new(),
+                catalysts: F::Set::default(),
                 recipes: Vec::new(),
+            }]);
+        }
+
+        //  Special case: 1 conversion.
+
+        for recipe in (0..F::Recipe::DIMENSION).map(F::Recipe::from_index) {
+            if source != recipe.input() || target != recipe.output() {
+                continue;
+            }
+
+            return Ok(vec![Path {
+                source,
+                target,
+                count: ONE,
+                catalysts: F::Set::default(),
+                recipes: vec![recipe],
             }]);
         }
 
         //  Is an inversion required, or not?
 
-        if source.count_negatives() == target.count_negatives() {
-            self.solve_by_fold(source, target)
-        } else {
-            self.solve_by_inversion(source, target)
-        }
+        self.solve_impl(source, target)
     }
 }
 
@@ -218,78 +223,12 @@ impl SolverConfiguration {
     }
 }
 
-impl<R, E> Solver<R, E>
+impl<F, E> Solver<F, E>
 where
-    R: RecipeSet<Arcosphere: Send> + Clone + Send,
+    F: ArcosphereFamily<Arcosphere: Send, Set: Send, Recipe: Send> + Send,
     E: Executor,
-    [(); R::Arcosphere::DIMENSION]: Sized,
 {
-    fn solve_by_inversion(
-        &self,
-        source: Set<R::Arcosphere>,
-        target: Set<R::Arcosphere>,
-    ) -> Result<Vec<Path<R::Arcosphere>>, ResolutionError> {
-        debug_assert_eq!(source.len(), target.len());
-        debug_assert_ne!(source.count_negatives(), target.count_negatives());
-
-        //  Special case: 1 conversion.
-
-        for inversion in self.recipes.inversions() {
-            if source != inversion.input() || target != inversion.output() {
-                continue;
-            }
-
-            return Ok(vec![Path {
-                source,
-                target,
-                count: ONE,
-                catalysts: Set::new(),
-                recipes: vec![Recipe::Inversion(inversion)],
-            }]);
-        }
-
-        //  From then on, it gets a tad more complicated.
-
-        let count = Searcher::select_count(&self.recipes, source, target)?;
-
-        self.solve_impl(source, target, count)
-    }
-
-    fn solve_by_fold(
-        &self,
-        source: Set<R::Arcosphere>,
-        target: Set<R::Arcosphere>,
-    ) -> Result<Vec<Path<R::Arcosphere>>, ResolutionError> {
-        debug_assert_eq!(source.len(), target.len());
-        debug_assert_eq!(source.count_negatives(), target.count_negatives());
-
-        //  Special case: 1 conversion.
-
-        for folding in self.recipes.foldings() {
-            if source != folding.input() || target != folding.output() {
-                continue;
-            }
-
-            return Ok(vec![Path {
-                source,
-                target,
-                count: ONE,
-                catalysts: Set::new(),
-                recipes: vec![Recipe::Folding(folding)],
-            }]);
-        }
-
-        //  From then on, it gets a tad more complicated.
-
-        self.solve_impl(source, target, ONE)
-    }
-
-    fn solve_impl(
-        &self,
-        source: Set<R::Arcosphere>,
-        target: Set<R::Arcosphere>,
-        count: NonZeroU8,
-    ) -> Result<Vec<Path<R::Arcosphere>>, ResolutionError> {
+    fn solve_impl(&self, source: F::Set, target: F::Set) -> Result<Vec<Path<F>>, ResolutionError> {
         let catalysts = self.configuration.catalysts();
         let configuration = self.configuration.into();
 
@@ -298,14 +237,12 @@ where
         for i in catalysts {
             let repetitions = self.configuration.repetitions();
 
-            for n in repetitions {
-                let Some(n) = NonZeroU8::new(n) else {
+            for count in repetitions {
+                let Some(count) = NonZeroU8::new(count) else {
                     continue;
                 };
 
-                let count = count.saturating_mul(n);
-
-                let searchers = Searcher::generate_searchers(&self.recipes, source, target, count, i, configuration);
+                let searchers = Searcher::generate_searchers(self.family, source, target, count, i, configuration);
 
                 let tasks: Vec<_> = searchers.into_iter().map(|searcher| move || searcher.solve()).collect();
 
@@ -353,94 +290,36 @@ impl From<SolverConfiguration> for SearcherConfiguration {
     }
 }
 
-struct Searcher<R>
+struct Searcher<F>
 where
-    R: RecipeSet,
-    [(); R::Arcosphere::DIMENSION]: Sized,
+    F: ArcosphereFamily,
 {
-    recipes: R,
-    source: Set<R::Arcosphere>,
-    target: Set<R::Arcosphere>,
+    family: F,
+    source: F::Set,
+    target: F::Set,
     count: NonZeroU8,
-    catalysts: Set<R::Arcosphere>,
+    catalysts: F::Set,
     configuration: SearcherConfiguration,
 }
 
-impl<R> Searcher<R>
+impl<F> Searcher<F>
 where
-    R: RecipeSet + Clone,
-    [(); R::Arcosphere::DIMENSION]: Sized,
+    F: ArcosphereFamily,
 {
-    //  Selects the count to use.
-    fn select_count(
-        recipes: &R,
-        source: Set<R::Arcosphere>,
-        target: Set<R::Arcosphere>,
-    ) -> Result<NonZeroU8, ResolutionError> {
-        debug_assert_ne!(source.count_negatives(), target.count_negatives());
-
-        //  Determine the direction in which to invert.
-        let polarity = if source.count_negatives() > target.count_negatives() {
-            Polarity::Positive
-        } else {
-            Polarity::Negative
-        };
-
-        //  Determine the minimum count to use.
-        //
-        //  The count must be so that the inversions can be applied.
-        let inversions = recipes.inversions().filter(|r| r.polarity() == polarity);
-
-        //  Determine the number of spheres flipped by a source -> target conversion, and by a recipe application.
-        let (target_flipped, recipe_flipped) = match polarity {
-            Polarity::Positive => {
-                let target_flipped = target.count_positives() - source.count_positives();
-                let recipe_flipped = inversions
-                    .map(|i| i.output().count_positives() - i.input().count_positives())
-                    .min();
-
-                (target_flipped, recipe_flipped)
-            }
-            Polarity::Negative => {
-                let target_flipped = target.count_negatives() - source.count_negatives();
-                let recipe_flipped = inversions
-                    .map(|i| i.output().count_negatives() - i.input().count_negatives())
-                    .min();
-
-                (target_flipped, recipe_flipped)
-            }
-        };
-
-        let recipe_flipped = recipe_flipped.ok_or(ResolutionError::NotWithInversions)?;
-
-        if target_flipped == recipe_flipped {
-            return Ok(ONE);
-        }
-
-        //  If the number of flipped arcospheres doesn't quite match, use the GCD to determine how to make it work.
-        let gcd = num_integer::gcd(target_flipped, recipe_flipped);
-
-        let count = recipe_flipped / gcd;
-
-        debug_assert_eq!(0, target_flipped * count % recipe_flipped);
-
-        NonZeroU8::new(count.try_into().expect("sufficiently small count")).ok_or(ResolutionError::NotWithInversions)
-    }
-
     fn generate_searchers(
-        recipes: &R,
-        source: Set<R::Arcosphere>,
-        target: Set<R::Arcosphere>,
+        family: F,
+        source: F::Set,
+        target: F::Set,
         count: NonZeroU8,
         number_catalysts: usize,
         configuration: SearcherConfiguration,
-    ) -> Vec<Searcher<R>> {
+    ) -> Vec<Searcher<F>> {
         let catalysts = Self::generate_catalysts(number_catalysts);
 
         catalysts
             .into_iter()
             .map(|catalysts| Searcher {
-                recipes: recipes.clone(),
+                family,
                 source,
                 target,
                 count,
@@ -458,19 +337,19 @@ where
     //  -   1: 8, one of each.
     //  -   2: 36, at each level 8, then 7, then 6, etc...
     //  -   ...
-    fn generate_catalysts(number: usize) -> Vec<Set<R::Arcosphere>> {
+    fn generate_catalysts(number: usize) -> Vec<F::Set> {
         let mut result = Vec::new();
 
         if number == 0 {
             return result;
         }
 
-        Self::generate_catalysts_rec(Set::new(), number, &mut result);
+        Self::generate_catalysts_rec(F::Set::default(), number, &mut result);
 
         result
     }
 
-    fn generate_catalysts_rec(catalysts: Set<R::Arcosphere>, number: usize, output: &mut Vec<Set<R::Arcosphere>>) {
+    fn generate_catalysts_rec(catalysts: F::Set, number: usize, output: &mut Vec<F::Set>) {
         debug_assert!(number > 0);
 
         //  Do not insert spheres with a lower index than the highest index sphere used: it only creates duplicates.
@@ -480,10 +359,10 @@ where
             .map(|sphere| sphere.into_index())
             .unwrap_or_default();
 
-        let generator = (minimum..R::Arcosphere::DIMENSION).map(|i| {
+        let generator = (minimum..F::Arcosphere::DIMENSION).map(|i| {
             let mut catalysts = catalysts;
 
-            catalysts.insert(R::Arcosphere::from_index(i));
+            catalysts.insert(F::Arcosphere::from_index(i));
 
             catalysts
         });
@@ -499,12 +378,11 @@ where
     }
 }
 
-impl<R> Searcher<R>
+impl<F> Searcher<F>
 where
-    R: RecipeSet,
-    [(); R::Arcosphere::DIMENSION]: Sized,
+    F: ArcosphereFamily,
 {
-    fn solve(&self) -> Result<Vec<Path<R::Arcosphere>>, ResolutionError> {
+    fn solve(&self) -> Result<Vec<Path<F>>, ResolutionError> {
         let maximum_iterations = (self.configuration.maximum_recipes as usize + 1) / 2;
 
         let source = self.source * self.count + self.catalysts;
@@ -524,7 +402,7 @@ where
                 return Err(ResolutionError::OutsideCatalysts);
             }
 
-            let searcher = searcher::ForwardSearcher::new(&self.recipes);
+            let searcher = searcher::ForwardSearcher::new(self.family);
 
             let matched = Self::advance(
                 &searcher,
@@ -539,7 +417,7 @@ where
                 return Ok(self.stitch(&forward, &backward, out_forward.keys().copied()));
             }
 
-            let searcher = searcher::BackwardSearcher::new(&self.recipes);
+            let searcher = searcher::BackwardSearcher::new(self.family);
 
             let matched = Self::advance(
                 &searcher,
@@ -565,14 +443,14 @@ where
     //  Returns true if a connection has been found.
     fn advance<S, OF>(
         searcher: &S,
-        start: Set<R::Arcosphere>,
-        known: &mut FxHashMap<Set<R::Arcosphere>, S::Recipe>,
-        inputs: &mut FxHashSet<Set<R::Arcosphere>>,
-        outputs: &mut FxHashMap<Set<R::Arcosphere>, S::Recipe>,
-        opposite_known: &FxHashMap<Set<R::Arcosphere>, OF>,
+        start: F::Set,
+        known: &mut FxHashMap<F::Set, S::Recipe>,
+        inputs: &mut FxHashSet<F::Set>,
+        outputs: &mut FxHashMap<F::Set, S::Recipe>,
+        opposite_known: &FxHashMap<F::Set, OF>,
     ) -> bool
     where
-        S: searcher::DirectionSearcher<Set = Set<R::Arcosphere>>,
+        S: searcher::DirectionSearcher<Set = F::Set>,
     {
         searcher.fold(start, known, inputs, outputs);
 
@@ -586,12 +464,12 @@ where
 
     fn stitch<C>(
         &self,
-        forward: &FxHashMap<Set<R::Arcosphere>, Recipe<R::Arcosphere>>,
-        backward: &FxHashMap<Set<R::Arcosphere>, Reverse<Recipe<R::Arcosphere>>>,
+        forward: &FxHashMap<F::Set, F::Recipe>,
+        backward: &FxHashMap<F::Set, Reverse<F::Recipe>>,
         candidates: C,
-    ) -> Vec<Path<R::Arcosphere>>
+    ) -> Vec<Path<F>>
     where
-        C: IntoIterator<Item = Set<R::Arcosphere>>,
+        C: IntoIterator<Item = F::Set>,
     {
         let mut result = Vec::new();
 
@@ -630,10 +508,10 @@ where
     }
 
     fn stitch_forward(
-        _source: Set<R::Arcosphere>,
-        forward: &FxHashMap<Set<R::Arcosphere>, Recipe<R::Arcosphere>>,
-        candidate: Set<R::Arcosphere>,
-        recipes: &mut Vec<Recipe<R::Arcosphere>>,
+        _source: F::Set,
+        forward: &FxHashMap<F::Set, F::Recipe>,
+        candidate: F::Set,
+        recipes: &mut Vec<F::Recipe>,
     ) {
         let mut step = candidate;
 
@@ -649,10 +527,10 @@ where
     }
 
     fn stitch_backward(
-        _target: Set<R::Arcosphere>,
-        backward: &FxHashMap<Set<R::Arcosphere>, Reverse<Recipe<R::Arcosphere>>>,
-        candidate: Set<R::Arcosphere>,
-        recipes: &mut Vec<Recipe<R::Arcosphere>>,
+        _target: F::Set,
+        backward: &FxHashMap<F::Set, Reverse<F::Recipe>>,
+        candidate: F::Set,
+        recipes: &mut Vec<F::Recipe>,
     ) {
         let mut step = candidate;
 
@@ -667,23 +545,18 @@ where
 }
 
 mod searcher {
-    use core::{
-        cmp::Eq,
-        fmt::Debug,
-        hash::Hash,
-        ops::{Add, Sub},
-    };
+    use core::marker::PhantomData;
 
-    use crate::model::IsSubsetOf;
+    use crate::model::{ArcosphereRecipe, ArcosphereSet};
 
     use super::*;
 
     pub(super) trait DirectionSearcher {
         //  The set of arcospheres to use.
-        type Set: Copy + Eq + Hash + IsSubsetOf + Add<Output = Self::Set> + Sub<Output = Self::Set>;
+        type Set: ArcosphereSet;
 
         //  The recipe to use.
-        type Recipe: Copy + Debug;
+        type Recipe: Copy + fmt::Debug;
 
         #[allow(dead_code)]
         fn direction(&self) -> &'static str;
@@ -726,37 +599,40 @@ mod searcher {
         }
     }
 
-    pub(super) struct ForwardSearcher<'a, R>(BaseSearcher<'a, R>);
+    pub(super) struct ForwardSearcher<F> {
+        _marker: PhantomData<fn(F) -> F>,
+    }
 
-    pub(super) struct BackwardSearcher<'a, R>(BaseSearcher<'a, R>);
+    pub(super) struct BackwardSearcher<F> {
+        _marker: PhantomData<fn(F) -> F>,
+    }
 
-    impl<'a, R> ForwardSearcher<'a, R> {
-        pub(super) fn new(recipes: &'a R) -> Self {
-            Self(BaseSearcher { recipes })
+    impl<F> ForwardSearcher<F> {
+        pub(super) fn new(_family: F) -> Self {
+            Self { _marker: PhantomData }
         }
     }
 
-    impl<'a, R> BackwardSearcher<'a, R> {
-        pub(super) fn new(recipes: &'a R) -> Self {
-            Self(BaseSearcher { recipes })
+    impl<F> BackwardSearcher<F> {
+        pub(super) fn new(_family: F) -> Self {
+            Self { _marker: PhantomData }
         }
     }
 
-    impl<R> DirectionSearcher for ForwardSearcher<'_, R>
+    impl<F> DirectionSearcher for ForwardSearcher<F>
     where
-        R: RecipeSet,
-        [(); R::Arcosphere::DIMENSION]: Sized,
+        F: ArcosphereFamily,
     {
-        type Set = Set<R::Arcosphere>;
+        type Set = F::Set;
 
-        type Recipe = Recipe<R::Arcosphere>;
+        type Recipe = F::Recipe;
 
         fn direction(&self) -> &'static str {
             "forward"
         }
 
         fn all_recipes(&self) -> impl Iterator<Item = Self::Recipe> {
-            self.0.all_recipes()
+            (0..F::Recipe::DIMENSION).map(F::Recipe::from_index)
         }
 
         fn extract_recipe(&self, recipe: Self::Recipe) -> (Self::Set, Self::Set) {
@@ -764,21 +640,20 @@ mod searcher {
         }
     }
 
-    impl<R> DirectionSearcher for BackwardSearcher<'_, R>
+    impl<F> DirectionSearcher for BackwardSearcher<F>
     where
-        R: RecipeSet,
-        [(); R::Arcosphere::DIMENSION]: Sized,
+        F: ArcosphereFamily,
     {
-        type Set = Set<R::Arcosphere>;
+        type Set = F::Set;
 
-        type Recipe = Reverse<Recipe<R::Arcosphere>>;
+        type Recipe = Reverse<F::Recipe>;
 
         fn direction(&self) -> &'static str {
             "backward"
         }
 
         fn all_recipes(&self) -> impl Iterator<Item = Self::Recipe> {
-            self.0.all_recipes().map(Reverse)
+            (0..F::Recipe::DIMENSION).map(|i| Reverse(F::Recipe::from_index(i)))
         }
 
         fn extract_recipe(&self, recipe: Self::Recipe) -> (Self::Set, Self::Set) {
@@ -787,38 +662,20 @@ mod searcher {
             (recipe.output(), recipe.input())
         }
     }
-
-    struct BaseSearcher<'a, R> {
-        recipes: &'a R,
-    }
-
-    impl<'a, R> BaseSearcher<'a, R>
-    where
-        R: RecipeSet,
-        [(); R::Arcosphere::DIMENSION]: Sized,
-    {
-        fn all_recipes(&self) -> impl Iterator<Item = Recipe<R::Arcosphere>> + use<'a, R> {
-            let foldings = self.recipes.foldings().map(Recipe::Folding);
-            let inversions = self.recipes.inversions().map(Recipe::Inversion);
-
-            inversions.chain(foldings)
-        }
-    }
 } // mod searcher
 
 #[cfg(test)]
 mod tests {
     use crate::{
         executor::DefaultExecutor,
-        model::FoldingRecipe,
-        space_exploration::{SePath, SeSet},
+        space_exploration::{SeArcosphereFamily, SeArcosphereRecipe, SeArcosphereSet, SePath},
     };
 
     use super::*;
 
     #[test]
     fn size() {
-        assert_eq!(186, core::mem::size_of::<Searcher<SeRecipeSet>>());
+        assert_eq!(26, core::mem::size_of::<Searcher<SeArcosphereFamily>>());
     }
 
     #[test]
@@ -829,7 +686,7 @@ mod tests {
             source: set,
             target: set,
             count: ONE,
-            catalysts: Set::new(),
+            catalysts: SeArcosphereSet::new(),
             recipes: Vec::new(),
         }];
 
@@ -847,8 +704,8 @@ mod tests {
             source,
             target,
             count: ONE,
-            catalysts: Set::new(),
-            recipes: vec![Recipe::Folding(FoldingRecipe::new(source, target).unwrap())],
+            catalysts: SeArcosphereSet::new(),
+            recipes: vec![SeArcosphereRecipe::EO],
         }];
 
         let paths = solve(source, target);
@@ -869,20 +726,14 @@ mod tests {
                 target,
                 count: ONE,
                 catalysts: catalysts_g,
-                recipes: vec![
-                    Recipe::Folding("PG -> XO".parse().unwrap()),
-                    Recipe::Folding("EO -> LG".parse().unwrap()),
-                ],
+                recipes: vec![SeArcosphereRecipe::PG, SeArcosphereRecipe::EO],
             },
             Path {
                 source,
                 target,
                 count: ONE,
                 catalysts: catalysts_o,
-                recipes: vec![
-                    Recipe::Folding("EO -> LG".parse().unwrap()),
-                    Recipe::Folding("PG -> XO".parse().unwrap()),
-                ],
+                recipes: vec![SeArcosphereRecipe::EO, SeArcosphereRecipe::PG],
             },
         ];
 
@@ -902,13 +753,13 @@ mod tests {
         let catalysts_xo = "XO".parse().unwrap();
         let catalysts_xt = "XT".parse().unwrap();
 
-        let inversion = "ELPX -> GOTZ".parse().unwrap();
+        let inversion = SeArcosphereRecipe::ELPX;
 
-        let et = "ET -> PO".parse().unwrap();
-        let lo = "LO -> XT".parse().unwrap();
-        let lt = "LT -> EZ".parse().unwrap();
-        let pg = "PG -> XO".parse().unwrap();
-        let xz = "XZ -> PT".parse().unwrap();
+        let et = SeArcosphereRecipe::ET;
+        let lo = SeArcosphereRecipe::LO;
+        let lt = SeArcosphereRecipe::LT;
+        let pg = SeArcosphereRecipe::PG;
+        let xz = SeArcosphereRecipe::XZ;
 
         let expected = vec![
             Path {
@@ -955,22 +806,20 @@ mod tests {
 
         let catalysts = "X".parse().unwrap();
 
-        let xz = "XZ -> PT".parse().unwrap();
-        let pz = "PZ -> EG".parse().unwrap();
-        let et = "ET -> PO".parse().unwrap();
-        let pg = "PG -> XO".parse().unwrap();
-        let eo = "EO -> LG".parse().unwrap();
-        let lo = "LO -> XT".parse().unwrap();
+        let xz = SeArcosphereRecipe::XZ;
+        let pz = SeArcosphereRecipe::PZ;
+        let et = SeArcosphereRecipe::ET;
+        let pg = SeArcosphereRecipe::PG;
+        let eo = SeArcosphereRecipe::EO;
+        let lo = SeArcosphereRecipe::LO;
 
-        let expected = vec![
-            Path {
-                source,
-                target,
-                count: TWO,
-                catalysts,
-                recipes: vec![xz, pz, et, pg, xz, pz, eo, lo],
-            }
-        ];
+        let expected = vec![Path {
+            source,
+            target,
+            count: TWO,
+            catalysts,
+            recipes: vec![xz, pz, et, pg, xz, pz, eo, lo],
+        }];
 
         let paths = solve(source, target);
 
@@ -991,12 +840,12 @@ mod tests {
         let catalysts_xt = "XT".parse().unwrap();
         let catalysts_xz = "XZ".parse().unwrap();
 
-        let inversion = "GOTZ -> ELPX".parse().unwrap();
+        let inversion = SeArcosphereRecipe::GOTZ;
 
-        let lo = "LO -> XT".parse().unwrap();
-        let lt = "LT -> EZ".parse().unwrap();
-        let xg = "XG -> LZ".parse().unwrap();
-        let xz = "XZ -> PT".parse().unwrap();
+        let lo = SeArcosphereRecipe::LO;
+        let lt = SeArcosphereRecipe::LT;
+        let xg = SeArcosphereRecipe::XG;
+        let xz = SeArcosphereRecipe::XZ;
 
         let expected = vec![
             Path {
@@ -1069,7 +918,7 @@ mod tests {
         assert_eq!(expected, paths);
     }
 
-    fn solve(source: SeSet, target: SeSet) -> Vec<SePath> {
+    fn solve(source: SeArcosphereSet, target: SeArcosphereSet) -> Vec<SePath> {
         SeSolver::<DefaultExecutor>::default()
             .solve(source, target)
             .expect("success")
@@ -1094,7 +943,7 @@ mod tests {
         }
     }
 
-    fn generate_catalysts(n: usize) -> Vec<SeSet> {
-        Searcher::<SeRecipeSet>::generate_catalysts(n)
+    fn generate_catalysts(n: usize) -> Vec<SeArcosphereSet> {
+        Searcher::<SeArcosphereFamily>::generate_catalysts(n)
     }
 } // mod tests

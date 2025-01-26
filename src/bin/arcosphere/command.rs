@@ -4,7 +4,7 @@ use core::{error::Error, num::NonZeroU8};
 
 use arcosphere::{
     model::ArcosphereRecipe,
-    space_exploration::{SeArcosphereRecipe, SeArcosphereSet, SePath},
+    space_exploration::{SeArcosphereRecipe, SeArcosphereSet, SePath, SeStagedPath},
 };
 
 /// Parses the command, returning it if valid.
@@ -23,7 +23,7 @@ pub enum Command {
         target: SeArcosphereSet,
     },
     Verify {
-        path: SePath,
+        path: SeStagedPath,
     },
 }
 
@@ -133,6 +133,10 @@ impl Command {
                 .map_err(|e| format!("Invalid recipe {input} -> {output}: {e}"))?;
 
             recipes.push(recipe);
+
+            if args.peek().is_some_and(|argument| argument == "//" || argument == "|") {
+                args.next();
+            }
         }
 
         let path = SePath {
@@ -142,6 +146,8 @@ impl Command {
             catalysts,
             recipes,
         };
+
+        let path = SeStagedPath { path, stages: vec![] };
 
         Ok(Self::Verify { path })
     }
@@ -175,12 +181,15 @@ mod tests {
     #[test]
     fn parse_verify_minimal() {
         let expected = Command::Verify {
-            path: SePath {
-                source: "EP".parse().unwrap(),
-                target: "LX".parse().unwrap(),
-                count: ONE,
-                catalysts: SeArcosphereSet::new(),
-                recipes: Vec::new(),
+            path: SeStagedPath {
+                path: SePath {
+                    source: "EP".parse().unwrap(),
+                    target: "LX".parse().unwrap(),
+                    count: ONE,
+                    catalysts: SeArcosphereSet::new(),
+                    recipes: Vec::new(),
+                },
+                stages: Vec::new(),
             },
         };
 
@@ -192,12 +201,15 @@ mod tests {
     #[test]
     fn parse_verify_complete() {
         let expected = Command::Verify {
-            path: SePath {
-                source: "EP".parse().unwrap(),
-                target: "LX".parse().unwrap(),
-                count: NonZeroU8::new(2).unwrap(),
-                catalysts: "G".parse().unwrap(),
-                recipes: vec![SeArcosphereRecipe::PG, SeArcosphereRecipe::EO],
+            path: SeStagedPath {
+                path: SePath {
+                    source: "EP".parse().unwrap(),
+                    target: "LX".parse().unwrap(),
+                    count: NonZeroU8::new(2).unwrap(),
+                    catalysts: "G".parse().unwrap(),
+                    recipes: vec![SeArcosphereRecipe::PG, SeArcosphereRecipe::EO],
+                },
+                stages: Vec::new(),
             },
         };
 

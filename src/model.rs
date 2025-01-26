@@ -274,6 +274,35 @@ where
 }
 
 //
+//  String operations
+//
+
+impl<F> fmt::Display for Path<F>
+where
+    F: ArcosphereFamily,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.source)?;
+
+        if self.count.get() > 1 {
+            write!(f, " x{}", self.count.get())?;
+        }
+
+        if !self.catalysts.is_empty() {
+            write!(f, " + {}", self.catalysts)?;
+        }
+
+        for (i, recipe) in self.recipes.iter().enumerate() {
+            let separator = if i > 0 { " | " } else { "  ->  " };
+
+            write!(f, "{separator}{recipe}")?;
+        }
+
+        Ok(())
+    }
+}
+
+//
 //  Identity operations
 //
 
@@ -314,6 +343,226 @@ where
 }
 
 impl<F> cmp::Ord for Path<F>
+where
+    F: ArcosphereFamily,
+{
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.tuplify().cmp(&other.tuplify())
+    }
+}
+
+/// Possible staged path computed by the solver.
+///
+/// This path converts source * count + catalysts into target * count + catalysts.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct StagedPath<F>
+where
+    F: ArcosphereFamily,
+{
+    /// The path.
+    pub path: Path<F>,
+    /// The index of the start of each parallel stage, with an implicit 0.
+    ///
+    /// The recipes in the path are, generally, not _strictly_ dependent, and instead some of them can be executed in
+    /// parallel at some point.
+    ///
+    /// Each set of recipes which can run in parallel is called a "stage" here, and the `stages` vector points to the
+    /// recipe in `path.recipes` which starts a stage.
+    ///
+    /// Since the first recipe always starts a stage, the implicit 0 is omitted.
+    pub stages: Vec<u8>,
+}
+
+impl<F> StagedPath<F>
+where
+    F: ArcosphereFamily,
+{
+    /// Creates a StagedPath, from a Path.
+    ///
+    /// The staged path thus created is not only guaranteed to be valid, it is also normalized by ensuring that the
+    /// recipes in each stage are sorted.
+    pub fn parallelize(mut path: Path<F>) -> Self {
+        struct Stage<F>
+        where
+            F: ArcosphereFamily,
+        {
+            remaining: F::Set,
+            recipes: Vec<F::Recipe>,
+        }
+
+        impl<F> Default for Stage<F>
+        where
+            F: ArcosphereFamily,
+        {
+            fn default() -> Self {
+                Self {
+                    remaining: F::Set::default(),
+                    recipes: Vec::new(),
+                }
+            }
+        }
+
+        fn find_earliest<F>(stages: &[Stage<F>], recipe: F::Recipe) -> usize
+        where
+            F: ArcosphereFamily,
+        {
+            assert!(!stages.is_empty());
+
+            (0..stages.len())
+                .rev()
+                .find(|&i| !recipe.input().is_subset_of(&stages[i].remaining))
+                .map(|i| i + 1)
+                .unwrap_or(0)
+        }
+
+        let remaining = path.source * path.count + path.catalysts;
+
+        let mut stages = vec![Stage::<F> {
+            remaining,
+            recipes: Vec::new(),
+        }];
+
+        for &r in &path.recipes {
+            let earliest = find_earliest(&stages, r);
+
+            let stage = &mut stages[earliest];
+
+            stage.remaining -= r.input();
+            stage.recipes.push(r);
+
+            if stage.recipes.len() == 1 {
+                let remaining = stage.remaining + r.output();
+                stages.push(Stage::<F> {
+                    remaining,
+                    recipes: Vec::new(),
+                });
+
+                continue;
+            }
+
+            for stage in stages.iter_mut().skip(earliest + 1) {
+                stage.remaining -= r.input();
+                stage.remaining += r.output();
+            }
+        }
+
+        if stages.last().is_some_and(|stage| stage.recipes.is_empty()) {
+            stages.pop();
+        }
+
+        path.recipes.clear();
+
+        let mut compressed = Vec::new();
+
+        for stage in &mut stages {
+            stage.recipes.sort();
+
+            if !path.recipes.is_empty() {
+                compressed.push(path.recipes.len() as u8);
+            }
+
+            path.recipes.extend_from_slice(&stage.recipes);
+        }
+
+        Self {
+            path,
+            stages: compressed,
+        }
+    }
+
+    /// Returns an iterator over the stages.
+    pub fn stages(&self) -> impl Iterator<Item = &[F::Recipe]> + use<'_, F> {
+        let start = iter::once(0);
+        let end = iter::once(self.path.recipes.len());
+
+        let stages = start.chain(self.stages.iter().map(|i| *i as usize)).chain(end);
+
+        stages.map_windows(|&[start, end]| &self.path.recipes[start..end])
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn tuplify(&self) -> (&Path<F>, &[u8]) {
+        (&self.path, &self.stages)
+    }
+}
+
+//
+//  String operations
+//
+
+impl<F> fmt::Display for StagedPath<F>
+where
+    F: ArcosphereFamily,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.path.source)?;
+
+        if self.path.count.get() > 1 {
+            write!(f, " x{}", self.path.count.get())?;
+        }
+
+        if !self.path.catalysts.is_empty() {
+            write!(f, " + {}", self.path.catalysts)?;
+        }
+
+        for (i, stage) in self.stages().enumerate() {
+            let separator = if i > 0 { " |  " } else { "  ->  " };
+
+            write!(f, "{separator}")?;
+
+            for (j, recipe) in stage.iter().enumerate() {
+                let separator = if j > 0 { " // " } else { "" };
+
+                write!(f, "{separator}{recipe}")?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+//
+//  Identity operations
+//
+
+impl<F> cmp::PartialEq for StagedPath<F>
+where
+    F: ArcosphereFamily,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.tuplify() == other.tuplify()
+    }
+}
+
+impl<F> cmp::Eq for StagedPath<F> where F: ArcosphereFamily {}
+
+impl<F> hash::Hash for StagedPath<F>
+where
+    F: ArcosphereFamily,
+{
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: hash::Hasher,
+    {
+        self.tuplify().hash(state);
+    }
+}
+
+//
+//  Order operations
+//
+
+impl<F> cmp::PartialOrd for StagedPath<F>
+where
+    F: ArcosphereFamily,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<F> cmp::Ord for StagedPath<F>
 where
     F: ArcosphereFamily,
 {

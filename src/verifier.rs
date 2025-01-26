@@ -8,7 +8,7 @@
 
 use core::{error, fmt};
 
-use crate::model::{ArcosphereFamily, ArcosphereRecipe, ArcosphereSet, Path};
+use crate::model::{ArcosphereFamily, ArcosphereRecipe, ArcosphereSet, StagedPath};
 
 /// Error which may occur during the verification.
 #[derive(Clone, Copy, Debug)]
@@ -75,10 +75,10 @@ where
     }
 
     /// Verifies that the path is correct.
-    pub fn verify(&self, path: &Path<F>) -> Result<(), VerificationError<F>> {
-        let mut step = path.source * path.count + path.catalysts;
+    pub fn verify(&self, staged: &StagedPath<F>) -> Result<(), VerificationError<F>> {
+        let mut step = staged.path.source * staged.path.count + staged.path.catalysts;
 
-        for (index, &recipe) in path.recipes.iter().enumerate() {
+        for (index, &recipe) in staged.path.recipes.iter().enumerate() {
             if !recipe.input().is_subset_of(&step) {
                 return Err(VerificationError::FailedApplication {
                     index,
@@ -90,7 +90,7 @@ where
             step = step - recipe.input() + recipe.output();
         }
 
-        let target = path.target * path.count;
+        let target = staged.path.target * staged.path.count;
 
         if !target.is_subset_of(&step) {
             return Err(VerificationError::FailedTarget { result: step });
@@ -98,7 +98,7 @@ where
 
         let remainder = step - target;
 
-        if remainder != path.catalysts {
+        if remainder != staged.path.catalysts {
             return Err(VerificationError::FailedCatalysts { remainder });
         }
 

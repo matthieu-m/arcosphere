@@ -6,7 +6,7 @@ use fxhash::{FxHashMap, FxHashSet};
 
 use crate::{
     executor::Executor,
-    model::{Arcosphere, ArcosphereFamily, ArcosphereRecipe, ArcosphereSet, Path},
+    model::{Arcosphere, ArcosphereFamily, ArcosphereRecipe, ArcosphereSet, Path, StagedPath},
     space_exploration::SeArcosphereFamily,
 };
 
@@ -161,7 +161,7 @@ where
     ///
     /// If the solver does not return any solution, then raising either the number of catalysts or the number of recipes
     /// may allow it to find further solutions.
-    pub fn solve(&self, source: F::Set, target: F::Set) -> Result<Vec<Path<F>>, ResolutionError> {
+    pub fn solve(&self, source: F::Set, target: F::Set) -> Result<Vec<StagedPath<F>>, ResolutionError> {
         //  Special case: impossible.
 
         if source.len() != target.len() {
@@ -171,13 +171,15 @@ where
         //  Special case: 0 conversion.
 
         if source == target {
-            return Ok(vec![Path {
+            let path = Path {
                 source,
                 target,
                 count: ONE,
                 catalysts: F::Set::default(),
                 recipes: Vec::new(),
-            }]);
+            };
+
+            return Ok(vec![StagedPath::parallelize(path)]);
         }
 
         //  Special case: 1 conversion.
@@ -187,13 +189,15 @@ where
                 continue;
             }
 
-            return Ok(vec![Path {
+            let path = Path {
                 source,
                 target,
                 count: ONE,
                 catalysts: F::Set::default(),
                 recipes: vec![recipe],
-            }]);
+            };
+
+            return Ok(vec![StagedPath::parallelize(path)]);
         }
 
         //  Is an inversion required, or not?
@@ -228,7 +232,7 @@ where
     F: ArcosphereFamily<Arcosphere: Send, Set: Send, Recipe: Send> + Send,
     E: Executor,
 {
-    fn solve_impl(&self, source: F::Set, target: F::Set) -> Result<Vec<Path<F>>, ResolutionError> {
+    fn solve_impl(&self, source: F::Set, target: F::Set) -> Result<Vec<StagedPath<F>>, ResolutionError> {
         let catalysts = self.configuration.catalysts();
         let configuration = self.configuration.into();
 
@@ -246,7 +250,7 @@ where
 
                 let tasks: Vec<_> = searchers.into_iter().map(|searcher| move || searcher.solve()).collect();
 
-                let mut results = Vec::new();
+                let mut results = FxHashSet::default();
 
                 for result in self.executor.execute(tasks) {
                     match result {
@@ -257,12 +261,14 @@ where
                     }
                 }
 
-                let Some(shortest) = results.iter().map(|p| p.recipes.len()).min() else {
+                let mut results: Vec<_> = results.into_iter().collect();
+
+                let Some(shortest) = results.iter().map(|p| p.path.recipes.len()).min() else {
                     continue;
                 };
 
                 //  Should longer paths still be made available?
-                results.retain(|p| p.recipes.len() == shortest);
+                results.retain(|p| p.path.recipes.len() == shortest);
 
                 //  Stable output is nice, and definitely not the most costly part anyway...
                 results.sort_unstable();
@@ -382,7 +388,7 @@ impl<F> Searcher<F>
 where
     F: ArcosphereFamily,
 {
-    fn solve(&self) -> Result<Vec<Path<F>>, ResolutionError> {
+    fn solve(&self) -> Result<FxHashSet<StagedPath<F>>, ResolutionError> {
         let maximum_iterations = (self.configuration.maximum_recipes as usize + 1) / 2;
 
         let source = self.source * self.count + self.catalysts;
@@ -467,11 +473,11 @@ where
         forward: &FxHashMap<F::Set, F::Recipe>,
         backward: &FxHashMap<F::Set, Reverse<F::Recipe>>,
         candidates: C,
-    ) -> Vec<Path<F>>
+    ) -> FxHashSet<StagedPath<F>>
     where
         C: IntoIterator<Item = F::Set>,
     {
-        let mut result = Vec::new();
+        let mut result = FxHashSet::default();
 
         for candidate in candidates {
             if !forward.contains_key(&candidate) || !backward.contains_key(&candidate) {
@@ -493,13 +499,15 @@ where
                 &mut recipes,
             );
 
-            result.push(Path {
+            let path = Path {
                 source: self.source,
                 target: self.target,
                 count: self.count,
                 catalysts: self.catalysts,
                 recipes,
-            })
+            };
+
+            result.insert(StagedPath::parallelize(path));
         }
 
         debug_assert_ne!(0, result.len());
@@ -668,7 +676,8 @@ mod searcher {
 mod tests {
     use crate::{
         executor::DefaultExecutor,
-        space_exploration::{SeArcosphereFamily, SeArcosphereRecipe, SeArcosphereSet, SePath},
+        model::Path,
+        space_exploration::{SeArcosphereFamily, SeArcosphereRecipe, SeArcosphereSet, SeStagedPath},
     };
 
     use super::*;
@@ -682,12 +691,15 @@ mod tests {
     fn solve_zero() {
         let set = "EL".parse().unwrap();
 
-        let expected = vec![Path {
-            source: set,
-            target: set,
-            count: ONE,
-            catalysts: SeArcosphereSet::new(),
-            recipes: Vec::new(),
+        let expected = vec![StagedPath {
+            path: Path {
+                source: set,
+                target: set,
+                count: ONE,
+                catalysts: SeArcosphereSet::new(),
+                recipes: Vec::new(),
+            },
+            stages: Vec::new(),
         }];
 
         let paths = solve(set, set);
@@ -700,12 +712,15 @@ mod tests {
         let source = "EO".parse().unwrap();
         let target = "LG".parse().unwrap();
 
-        let expected = vec![Path {
-            source,
-            target,
-            count: ONE,
-            catalysts: SeArcosphereSet::new(),
-            recipes: vec![SeArcosphereRecipe::EO],
+        let expected = vec![StagedPath {
+            path: Path {
+                source,
+                target,
+                count: ONE,
+                catalysts: SeArcosphereSet::new(),
+                recipes: vec![SeArcosphereRecipe::EO],
+            },
+            stages: Vec::new(),
         }];
 
         let paths = solve(source, target);
@@ -721,19 +736,25 @@ mod tests {
         let catalysts_o = "O".parse().unwrap();
 
         let expected = vec![
-            Path {
-                source,
-                target,
-                count: ONE,
-                catalysts: catalysts_g,
-                recipes: vec![SeArcosphereRecipe::PG, SeArcosphereRecipe::EO],
+            StagedPath {
+                path: Path {
+                    source,
+                    target,
+                    count: ONE,
+                    catalysts: catalysts_g,
+                    recipes: vec![SeArcosphereRecipe::PG, SeArcosphereRecipe::EO],
+                },
+                stages: vec![1],
             },
-            Path {
-                source,
-                target,
-                count: ONE,
-                catalysts: catalysts_o,
-                recipes: vec![SeArcosphereRecipe::EO, SeArcosphereRecipe::PG],
+            StagedPath {
+                path: Path {
+                    source,
+                    target,
+                    count: ONE,
+                    catalysts: catalysts_o,
+                    recipes: vec![SeArcosphereRecipe::EO, SeArcosphereRecipe::PG],
+                },
+                stages: vec![1],
             },
         ];
 
@@ -761,34 +782,36 @@ mod tests {
         let pg = SeArcosphereRecipe::PG;
         let xz = SeArcosphereRecipe::XZ;
 
-        let expected = vec![
-            Path {
-                source,
-                target,
-                count: TWO,
-                catalysts: catalysts_pg,
-                recipes: vec![pg, lo, lt, xz, inversion, lt, et],
+        let expected: Vec<StagedPath<_>> = vec![
+            StagedPath {
+                path: Path {
+                    source,
+                    target,
+                    count: TWO,
+                    catalysts: catalysts_pg,
+                    recipes: vec![pg, lo, lt, xz, inversion, lt, et],
+                },
+                stages: vec![1, 2, 3, 4, 6],
             },
-            Path {
-                source,
-                target,
-                count: TWO,
-                catalysts: catalysts_xo,
-                recipes: vec![lo, lt, xz, inversion, lt, et, pg],
+            StagedPath {
+                path: Path {
+                    source,
+                    target,
+                    count: TWO,
+                    catalysts: catalysts_xo,
+                    recipes: vec![lo, lt, xz, inversion, lt, et, pg],
+                },
+                stages: vec![1, 2, 3, 5, 6],
             },
-            Path {
-                source,
-                target,
-                count: TWO,
-                catalysts: catalysts_xo,
-                recipes: vec![lo, lt, xz, lt, inversion, et, pg],
-            },
-            Path {
-                source,
-                target,
-                count: TWO,
-                catalysts: catalysts_xt,
-                recipes: vec![lt, xz, et, lo, lt, inversion, pg],
+            StagedPath {
+                path: Path {
+                    source,
+                    target,
+                    count: TWO,
+                    catalysts: catalysts_xt,
+                    recipes: vec![lt, xz, et, lo, lt, inversion, pg],
+                },
+                stages: vec![1, 2, 3, 4, 5, 6],
             },
         ];
 
@@ -813,12 +836,15 @@ mod tests {
         let eo = SeArcosphereRecipe::EO;
         let lo = SeArcosphereRecipe::LO;
 
-        let expected = vec![Path {
-            source,
-            target,
-            count: TWO,
-            catalysts,
-            recipes: vec![xz, pz, et, pg, xz, pz, eo, lo],
+        let expected = vec![StagedPath {
+            path: Path {
+                source,
+                target,
+                count: TWO,
+                catalysts,
+                recipes: vec![xz, pz, et, pg, xz, pz, eo, lo],
+            },
+            stages: vec![1, 2, 3, 4, 5, 6, 7],
         }];
 
         let paths = solve(source, target);
@@ -848,68 +874,65 @@ mod tests {
         let xz = SeArcosphereRecipe::XZ;
 
         let expected = vec![
-            Path {
-                source,
-                target,
-                count: TWO,
-                catalysts: catalysts_lt,
-                recipes: vec![lo, xg, inversion, lt, xz],
+            StagedPath {
+                path: Path {
+                    source,
+                    target,
+                    count: TWO,
+                    catalysts: catalysts_lt,
+                    recipes: vec![lo, xg, inversion, lt, xz],
+                },
+                stages: vec![1, 2, 4],
             },
-            Path {
-                source,
-                target,
-                count: TWO,
-                catalysts: catalysts_lt,
-                recipes: vec![lo, xg, lt, inversion, xz],
+            StagedPath {
+                path: Path {
+                    source,
+                    target,
+                    count: TWO,
+                    catalysts: catalysts_lx,
+                    recipes: vec![lo, xg, lt, xz, inversion],
+                },
+                stages: vec![2, 4],
             },
-            Path {
-                source,
-                target,
-                count: TWO,
-                catalysts: catalysts_lx,
-                recipes: vec![lo, xg, lt, xz, inversion],
+            StagedPath {
+                path: Path {
+                    source,
+                    target,
+                    count: TWO,
+                    catalysts: catalysts_lz,
+                    recipes: vec![lo, inversion, xg, xz, lt],
+                },
+                stages: vec![1, 3, 4],
             },
-            Path {
-                source,
-                target,
-                count: TWO,
-                catalysts: catalysts_lx,
-                recipes: vec![lo, xg, xz, lt, inversion],
+            StagedPath {
+                path: Path {
+                    source,
+                    target,
+                    count: TWO,
+                    catalysts: catalysts_xt,
+                    recipes: vec![xg, inversion, lo, lt, xz],
+                },
+                stages: vec![1, 3, 4],
             },
-            Path {
-                source,
-                target,
-                count: TWO,
-                catalysts: catalysts_lz,
-                recipes: vec![lo, inversion, xg, xz, lt],
+            StagedPath {
+                path: Path {
+                    source,
+                    target,
+                    count: TWO,
+                    catalysts: catalysts_tz,
+                    recipes: vec![inversion, lo, xg, lt, xz],
+                },
+                stages: vec![1, 3],
             },
-            Path {
-                source,
-                target,
-                count: TWO,
-                catalysts: catalysts_xt,
-                recipes: vec![xg, inversion, lo, lt, xz],
-            },
-            Path {
-                source,
-                target,
-                count: TWO,
-                catalysts: catalysts_tz,
-                recipes: vec![inversion, lo, xg, xz, lt],
-            },
-            Path {
-                source,
-                target,
-                count: TWO,
-                catalysts: catalysts_xz,
-                recipes: vec![xg, lo, inversion, xz, lt],
-            },
-            Path {
-                source,
-                target,
-                count: TWO,
-                catalysts: catalysts_xz,
-                recipes: vec![xg, lo, xz, inversion, lt],
+            StagedPath {
+                path: Path {
+                    source,
+                    target,
+                    count: TWO,
+                    catalysts: catalysts_xz,
+                    recipes: vec![xg, lo, inversion, xz, lt],
+                },
+                stages: vec![1, 2, 4],
             },
         ];
 
@@ -918,7 +941,7 @@ mod tests {
         assert_eq!(expected, paths);
     }
 
-    fn solve(source: SeArcosphereSet, target: SeArcosphereSet) -> Vec<SePath> {
+    fn solve(source: SeArcosphereSet, target: SeArcosphereSet) -> Vec<SeStagedPath> {
         SeSolver::<DefaultExecutor>::default()
             .solve(source, target)
             .expect("success")

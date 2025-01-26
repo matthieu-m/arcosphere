@@ -2,13 +2,16 @@
 
 use core::{fmt, str};
 
-use crate::model::{Arcosphere, ArcosphereFamily, ArcosphereRecipe, Path, RecipeParseError, Set};
+use crate::model::{Arcosphere, ArcosphereFamily, ArcosphereRecipe, Path, RecipeParseError, Set, StagedPath};
+
+/// Set of arcospheres for Space Exploration.
+pub type SeArcosphereSet = Set<SeArcosphere>;
 
 /// Path for Space Exploration.
 pub type SePath = Path<SeArcosphereFamily>;
 
-/// Set of arcospheres for Space Exploration.
-pub type SeArcosphereSet = Set<SeArcosphere>;
+/// StagedPath for Space Exploration.
+pub type SeStagedPath = StagedPath<SeArcosphereFamily>;
 
 /// Space Exploration default Arcospheres.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

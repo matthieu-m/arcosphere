@@ -27,6 +27,7 @@
 //  Features
 #![feature(const_trait_impl)]
 #![feature(generic_const_exprs)]
+#![feature(iter_map_windows)]
 #![feature(precise_capturing_in_traits)]
 #![feature(strict_overflow_ops)]
 //  Lints
@@ -39,7 +40,7 @@ pub mod solver;
 pub mod space_exploration;
 pub mod verifier;
 
-use model::Path;
+use model::StagedPath;
 
 use solver::{ResolutionError, Solver};
 use space_exploration::{SeArcosphereFamily, SeArcosphereSet};
@@ -49,11 +50,11 @@ use verifier::{VerificationError, Verifier};
 pub fn solve(
     input: SeArcosphereSet,
     output: SeArcosphereSet,
-) -> Result<Vec<Path<SeArcosphereFamily>>, ResolutionError> {
+) -> Result<Vec<StagedPath<SeArcosphereFamily>>, ResolutionError> {
     Solver::<_, executor::DefaultExecutor>::new(SeArcosphereFamily).solve(input, output)
 }
 
 /// Default Space Exploration verify function.
-pub fn verify(path: &Path<SeArcosphereFamily>) -> Result<(), VerificationError<SeArcosphereFamily>> {
+pub fn verify(path: &StagedPath<SeArcosphereFamily>) -> Result<(), VerificationError<SeArcosphereFamily>> {
     Verifier::new(SeArcosphereFamily).verify(path)
 }

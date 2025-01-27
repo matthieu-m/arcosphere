@@ -155,20 +155,18 @@ pub trait ArcosphereRecipe:
     /// Parses the recipe, for use in implementing `str::FromStr`.
     fn parse(s: &str) -> Result<Self, RecipeParseError>
     where
-        RecipeParseError: From<<Self::Set as str::FromStr>::Err>,
+        Self::Set: str::FromStr<Err = SetParseError>,
         [(); Self::DIMENSION]: Sized,
     {
-        let (input, tail) = s.split_once(' ').ok_or(RecipeParseError::IllFormatted)?;
-        let (arrow, output) = tail.split_once(' ').ok_or(RecipeParseError::IllFormatted)?;
+        let mut tokens = s.split_whitespace().peekable();
 
-        if arrow != "->" {
-            return Err(RecipeParseError::IllFormatted);
+        let recipe = parse::parse_recipe::<Self, _>(&mut tokens)?;
+
+        if tokens.peek().is_some() {
+            return Err(RecipeParseError::Incomplete);
         }
 
-        let input = input.parse()?;
-        let output = output.parse()?;
-
-        Ok(Self::find(input, output)?)
+        Ok(recipe)
     }
 
     /// Formats the recipe, for use in implementing `fmt::Display`.
@@ -205,23 +203,25 @@ impl error::Error for RecipeIdentifyError {}
 /// An error which occurs when parsing a recipe.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum RecipeParseError {
-    /// Format error.
-    IllFormatted,
+    /// There is extraneous non-whitespace after the recipe.
+    Incomplete,
+    /// The input is missing.
+    MissingInput,
+    /// The input is invalid.
+    InvalidInput(SetParseError),
+    /// The arrow between input & output is missing.
+    MissingArrow,
+    /// The arrow between input & output is invalid.
+    InvalidArrow,
+    /// The output is missing.
+    MissingOutput,
+    /// The output is invalid.
+    InvalidOutput(SetParseError),
     /// The number of arcospheres is not preserved.
     PreservationError,
-    /// Unknown arcosphere.
-    UnknownArcosphere(char),
     /// Unknown recipe.
     UnknownRecipe,
 }
-
-impl fmt::Display for RecipeParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{self:?}")
-    }
-}
-
-impl error::Error for RecipeParseError {}
 
 impl From<RecipeIdentifyError> for RecipeParseError {
     fn from(value: RecipeIdentifyError) -> RecipeParseError {
@@ -231,13 +231,13 @@ impl From<RecipeIdentifyError> for RecipeParseError {
     }
 }
 
-impl From<SetParseError> for RecipeParseError {
-    fn from(value: SetParseError) -> RecipeParseError {
-        match value {
-            SetParseError::UnknownArcosphere(c) => RecipeParseError::UnknownArcosphere(c),
-        }
+impl fmt::Display for RecipeParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{self:?}")
     }
 }
+
+impl error::Error for RecipeParseError {}
 
 /// Possible path computed by the solver.
 ///
@@ -282,7 +282,7 @@ where
     F: ArcosphereFamily,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", self.source)?;
+        write!(f, "{} -> {}", self.source, self.target)?;
 
         if self.count.get() > 1 {
             write!(f, " x{}", self.count.get())?;
@@ -293,7 +293,7 @@ where
         }
 
         for (i, recipe) in self.recipes.iter().enumerate() {
-            let separator = if i > 0 { " | " } else { "  ->  " };
+            let separator = if i > 0 { " | " } else { "  =>  " };
 
             write!(f, "{separator}{recipe}")?;
         }
@@ -301,6 +301,130 @@ where
         Ok(())
     }
 }
+
+impl<F> str::FromStr for Path<F>
+where
+    F: ArcosphereFamily<Set: str::FromStr<Err = SetParseError>>,
+    [(); F::Recipe::DIMENSION]: Sized,
+{
+    type Err = PathParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        const SEPARATOR: &str = "|";
+
+        let mut tokens = s.split_whitespace().peekable();
+
+        let mut this =
+            parse::parse_path_head::<F, _>(&mut tokens).map_err(|error| PathParseError::InvalidHead { error })?;
+
+        loop {
+            let index = this.recipes.len();
+
+            if tokens.peek().is_some_and(|s| *s == SEPARATOR) {
+                return Err(PathParseError::UnexpectedSeparator { index });
+            }
+
+            let recipe = parse::parse_recipe::<F::Recipe, _>(&mut tokens)
+                .map_err(|error| PathParseError::InvalidRecipe { index, error })?;
+
+            this.recipes.push(recipe);
+
+            let Some(separator) = tokens.next() else {
+                //  Nothing else, we're done!
+                break;
+            };
+
+            if separator == SEPARATOR {
+                continue;
+            }
+
+            let error = if separator.parse::<F::Set>().is_ok() {
+                PathParseError::MissingSeparator { index }
+            } else {
+                PathParseError::InvalidSeparator { index }
+            };
+
+            return Err(error);
+        }
+
+        Ok(this)
+    }
+}
+
+/// Error which may arise when parsing a path.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum PathParseError {
+    /// The head of the path (SOURCE -> TARGET xCOUNT + CATALYSTS) could not be parsed.
+    InvalidHead {
+        /// Reason for which the head is invalid.
+        error: PathHeadParseError,
+    },
+    /// A recipe in the path is invalid.
+    InvalidRecipe {
+        /// Index of the invalid recipe.
+        index: usize,
+        /// Reason for which the recipe is invalid.
+        error: RecipeParseError,
+    },
+    /// A separator in the path is not "|".
+    InvalidSeparator {
+        /// Index of the recipe after which the invalid separator occurs.
+        index: usize,
+    },
+    /// A separator in the path is missing.
+    MissingSeparator {
+        /// Index of the recipe after which the missing separator should occur.
+        index: usize,
+    },
+    /// A separator was found in the path where none was expected
+    UnexpectedSeparator {
+        /// Index of the recipe before which the unexpected separator occurs.
+        index: usize,
+    },
+}
+
+impl fmt::Display for PathParseError {
+    #[cold]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{self:?}")
+    }
+}
+
+impl error::Error for PathParseError {}
+
+/// Error which may arise when parsing a path.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum PathHeadParseError {
+    /// The source is missing.
+    MissingSource,
+    /// The source is invalid.
+    InvalidSource(SetParseError),
+    /// The arrow between source & target is missing.
+    MissingArrow,
+    /// The arrow between source & target is invalid.
+    InvalidArrow,
+    /// The target is missing.
+    MissingTarget,
+    /// The target is invalid.
+    InvalidTarget(SetParseError),
+    /// The count is invalid.
+    InvalidCount,
+    /// The catalysts are missing (after a +).
+    MissingCatalysts,
+    /// The catalysts are invalid.
+    InvalidCatalysts(SetParseError),
+    /// The end of the path (=>) is missing.
+    MissingEnd,
+}
+
+impl fmt::Display for PathHeadParseError {
+    #[cold]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{self:?}")
+    }
+}
+
+impl error::Error for PathHeadParseError {}
 
 //
 //  Identity operations
@@ -534,7 +658,7 @@ where
     F: ArcosphereFamily,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", self.path.source)?;
+        write!(f, "{} -> {}", self.path.source, self.path.target)?;
 
         if self.path.count.get() > 1 {
             write!(f, " x{}", self.path.count.get())?;
@@ -545,7 +669,7 @@ where
         }
 
         for (i, stage) in self.stages().enumerate() {
-            let separator = if i > 0 { " |  " } else { "  ->  " };
+            let separator = if i > 0 { " |  " } else { "  =>  " };
 
             write!(f, "{separator}{stage}")?;
         }
@@ -553,6 +677,116 @@ where
         Ok(())
     }
 }
+
+impl<F> str::FromStr for StagedPath<F>
+where
+    F: ArcosphereFamily<Set: str::FromStr<Err = SetParseError>>,
+    [(); F::Recipe::DIMENSION]: Sized,
+{
+    type Err = StagedPathParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        const PARALLEL_SEPARATOR: &str = "//";
+        const STAGE_SEPARATOR: &str = "|";
+
+        let mut tokens = s.split_whitespace().peekable();
+
+        let path =
+            parse::parse_path_head::<F, _>(&mut tokens).map_err(|error| StagedPathParseError::InvalidHead { error })?;
+
+        let mut this = StagedPath { path, stages: vec![] };
+
+        loop {
+            let index = this.path.recipes.len();
+
+            if tokens
+                .peek()
+                .is_some_and(|s| *s == PARALLEL_SEPARATOR || *s == STAGE_SEPARATOR)
+            {
+                return Err(StagedPathParseError::UnexpectedSeparator { index });
+            }
+
+            let recipe = parse::parse_recipe::<F::Recipe, _>(&mut tokens)
+                .map_err(|error| StagedPathParseError::InvalidRecipe { index, error })?;
+
+            this.path.recipes.push(recipe);
+
+            let Some(separator) = tokens.next() else {
+                //  Nothing else, we're done!
+                break;
+            };
+
+            if separator == PARALLEL_SEPARATOR {
+                continue;
+            }
+
+            if separator == STAGE_SEPARATOR {
+                let index = this
+                    .path
+                    .recipes
+                    .len()
+                    .try_into()
+                    .map_err(|_| StagedPathParseError::TooManyRecipes)?;
+
+                this.stages.push(index);
+                continue;
+            }
+
+            let error = if separator.parse::<F::Set>().is_ok() {
+                StagedPathParseError::MissingSeparator { index }
+            } else {
+                StagedPathParseError::InvalidSeparator { index }
+            };
+
+            return Err(error);
+        }
+
+        Ok(this)
+    }
+}
+
+/// Error which may arise when parsing a path.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum StagedPathParseError {
+    /// The head of the path (SOURCE -> TARGET xCOUNT + CATALYSTS) could not be parsed.
+    InvalidHead {
+        /// Reason for which the head is invalid.
+        error: PathHeadParseError,
+    },
+    /// A recipe in the path is invalid.
+    InvalidRecipe {
+        /// Index of the invalid recipe.
+        index: usize,
+        /// Reason for which the recipe is invalid.
+        error: RecipeParseError,
+    },
+    /// The path contains too many recipes.
+    TooManyRecipes,
+    /// A separator in the path is not "|".
+    InvalidSeparator {
+        /// Index of the recipe after which the invalid separator occurs.
+        index: usize,
+    },
+    /// A separator in the path is missing.
+    MissingSeparator {
+        /// Index of the recipe after which the missing separator should occur.
+        index: usize,
+    },
+    /// A separator was found in the path where none was expected
+    UnexpectedSeparator {
+        /// Index of the recipe before which the unexpected separator occurs.
+        index: usize,
+    },
+}
+
+impl fmt::Display for StagedPathParseError {
+    #[cold]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{self:?}")
+    }
+}
+
+impl error::Error for StagedPathParseError {}
 
 //
 //  Identity operations
@@ -1124,6 +1358,122 @@ where
         self
     }
 }
+
+//
+//  Parsing operations
+//
+
+mod parse {
+    use core::{iter::Peekable, str::FromStr};
+
+    use super::*;
+
+    //  Parses the beginning of the path, stopping short of the recipes.
+    pub(super) fn parse_path_head<'a, F, I>(tokens: &mut Peekable<I>) -> Result<Path<F>, PathHeadParseError>
+    where
+        F: ArcosphereFamily<Set: FromStr<Err = SetParseError>>,
+        I: Iterator<Item = &'a str>,
+    {
+        const SINGLE_ARROW: &str = "->";
+        const DOUBLE_ARROW: &str = "=>";
+
+        const ONE: NonZeroU8 = NonZeroU8::new(1).unwrap();
+
+        let source = tokens
+            .next()
+            .ok_or(PathHeadParseError::MissingSource)
+            .and_then(|s| s.parse().map_err(PathHeadParseError::InvalidSource))?;
+
+        let arrow = tokens.next().ok_or(PathHeadParseError::MissingArrow)?;
+
+        if arrow != SINGLE_ARROW {
+            let error = if arrow.parse::<F::Set>().is_ok() {
+                PathHeadParseError::MissingArrow
+            } else {
+                PathHeadParseError::InvalidArrow
+            };
+
+            return Err(error);
+        }
+
+        let target = tokens
+            .next()
+            .ok_or(PathHeadParseError::MissingTarget)
+            .and_then(|s| s.parse().map_err(PathHeadParseError::InvalidTarget))?;
+
+        let count = if let Some(count) = tokens.next_if(|s| s.starts_with('x')) {
+            count
+                .strip_prefix('x')
+                .unwrap_or(count)
+                .parse()
+                .map_err(|_| PathHeadParseError::InvalidCount)?
+        } else {
+            ONE
+        };
+
+        let catalysts = if tokens.next_if_eq(&"+").is_some() {
+            let catalysts = tokens.next().ok_or(PathHeadParseError::MissingCatalysts)?;
+
+            if catalysts == DOUBLE_ARROW {
+                return Err(PathHeadParseError::MissingCatalysts);
+            }
+
+            catalysts.parse().map_err(PathHeadParseError::InvalidCatalysts)?
+        } else {
+            F::Set::default()
+        };
+
+        let arrow = tokens.next().ok_or(PathHeadParseError::MissingEnd)?;
+
+        if arrow != DOUBLE_ARROW {
+            return Err(PathHeadParseError::MissingEnd);
+        }
+
+        let recipes = Vec::new();
+
+        Ok(Path {
+            source,
+            target,
+            count,
+            catalysts,
+            recipes,
+        })
+    }
+
+    //  Parses one recipe.
+    pub(super) fn parse_recipe<'a, R, I>(tokens: &mut Peekable<I>) -> Result<R, RecipeParseError>
+    where
+        R: ArcosphereRecipe<Set: FromStr<Err = SetParseError>>,
+        I: Iterator<Item = &'a str>,
+        [(); R::DIMENSION]: Sized,
+    {
+        const ARROW: &str = "->";
+
+        let input = tokens
+            .next()
+            .ok_or(RecipeParseError::MissingInput)
+            .and_then(|s| s.parse().map_err(RecipeParseError::InvalidInput))?;
+
+        let arrow = tokens.next().ok_or(RecipeParseError::MissingArrow)?;
+
+        if arrow != ARROW {
+            let error = if arrow.parse::<R::Set>().is_ok() {
+                RecipeParseError::MissingArrow
+            } else {
+                RecipeParseError::InvalidArrow
+            };
+
+            return Err(error);
+        }
+
+        let output = tokens
+            .next()
+            .ok_or(RecipeParseError::MissingOutput)
+            .and_then(|s| s.parse().map_err(RecipeParseError::InvalidOutput))?;
+
+        Ok(R::find(input, output)?)
+    }
+} // mod parse
 
 //
 //  Serialization operations

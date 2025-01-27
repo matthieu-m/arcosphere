@@ -3,7 +3,8 @@
 //! There are two sub-commands:
 //!
 //! -   `<arcosphere> solve SOURCE TARGET`.
-//! -   `<arcosphere> verify SOURCE TARGET [xCOUNT] [+CATALYSTS] [IN -> OUT]*`.
+//! -   `<arcosphere> verify PATH`.
+//!     where PATH is SOURCE -> TARGET [xCOUNT] [+CATALYSTS] => [IN -> OUT] ((// | '|') [IN -> OUT])*.
 
 //  Features
 #![feature(generic_const_exprs)]

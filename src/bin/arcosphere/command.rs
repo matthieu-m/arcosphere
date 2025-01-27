@@ -1,11 +1,8 @@
 //! Command parsing.
 
-use core::{error::Error, num::NonZeroU8};
+use core::error::Error;
 
-use arcosphere::{
-    model::ArcosphereRecipe,
-    space_exploration::{SeArcosphereRecipe, SeArcosphereSet, SePath, SeStagedPath},
-};
+use arcosphere::space_exploration::{SeArcosphereSet, SeStagedPath};
 
 /// Parses the command, returning it if valid.
 pub fn parse<I>(args: I) -> Result<Command, Box<dyn Error>>
@@ -49,8 +46,6 @@ impl Command {
 //  Implementation
 //
 
-const ONE: NonZeroU8 = NonZeroU8::new(1).unwrap();
-
 impl Command {
     fn parse_solve<I>(mut args: I) -> Result<Self, Box<dyn Error>>
     where
@@ -63,6 +58,7 @@ impl Command {
         let source: SeArcosphereSet = source
             .parse()
             .map_err(|e| format!("Failed to parse SOURCE {source}: {e}"))?;
+
         let target: SeArcosphereSet = target
             .parse()
             .map_err(|e| format!("Failed to parse TARGET {target}: {e}"))?;
@@ -74,82 +70,11 @@ impl Command {
     where
         I: Iterator<Item = String>,
     {
-        let (Some(source), Some(target)) = (args.next(), args.next()) else {
-            return Err("Specify at least two arguments to verify: SOURCE and TARGET".into());
+        let Some(path) = args.next() else {
+            return Err("Specify exactly one argument to verify: PATH".into());
         };
 
-        let source: SeArcosphereSet = source
-            .parse()
-            .map_err(|e| format!("Failed to parse SOURCE {source}: {e}"))?;
-        let target: SeArcosphereSet = target
-            .parse()
-            .map_err(|e| format!("Failed to parse TARGET {target}: {e}"))?;
-
-        let mut args = args.peekable();
-
-        let mut count = ONE;
-        let mut catalysts = SeArcosphereSet::new();
-        let mut recipes = Vec::new();
-
-        if let Some(argument) = args.peek()
-            && let Some(argument) = argument.strip_prefix('x')
-        {
-            count = argument
-                .parse()
-                .map_err(|e| format!("Failed to parse COUNT x{argument}: {e}"))?;
-
-            args.next();
-        }
-
-        if let Some(argument) = args.peek()
-            && let Some(argument) = argument.strip_prefix('+')
-        {
-            catalysts = argument
-                .parse()
-                .map_err(|e| format!("Failed to parse CATALYSTS +{argument}: {e}"))?;
-
-            args.next();
-        }
-
-        while let Some(input) = args.next() {
-            let n = recipes.len();
-
-            let (Some(arrow), Some(output)) = (args.next(), args.next()) else {
-                return Err(format!("Failed to parse {n}th recipe, not formatted as: IN -> OUT").into());
-            };
-
-            if arrow != "->" {
-                return Err(format!("Failed to parse {n}th recipe, not formatted as: IN -> OUT").into());
-            }
-
-            let input: SeArcosphereSet = input
-                .parse()
-                .map_err(|e| format!("Failed to parse IN {input} of {n}th recipe: {e}"))?;
-            let output: SeArcosphereSet = output
-                .parse()
-                .map_err(|e| format!("Failed to parse OUT {output} of {n}th recipe: {e}"))?;
-
-            let recipe = SeArcosphereRecipe::find(input, output)
-                .map_err(|e| format!("Invalid recipe {input} -> {output}: {e}"))?;
-
-            recipes.push(recipe);
-
-            if args.peek().is_some_and(|argument| argument == "//" || argument == "|") {
-                args.next();
-            }
-        }
-
-        let path = SePath {
-            source,
-            target,
-            count,
-            catalysts,
-            recipes,
-        };
-
-        let stages = (1..(path.recipes.len() as u8)).collect();
-
-        let path = SeStagedPath { path, stages };
+        let path = path.parse().map_err(|e| format!("Failed to parse PATH: {e}"))?;
 
         Ok(Self::Verify { path })
     }
@@ -157,9 +82,13 @@ impl Command {
 
 #[cfg(test)]
 mod tests {
-    use arcosphere::space_exploration::SeArcosphereRecipe;
+    use core::num::NonZeroU8;
+
+    use arcosphere::space_exploration::{SeArcosphereRecipe, SePath, SeStagedPath};
 
     use super::*;
+
+    const ONE: NonZeroU8 = NonZeroU8::new(1).unwrap();
 
     #[test]
     fn parse_unknown() {
@@ -185,17 +114,17 @@ mod tests {
         let expected = Command::Verify {
             path: SeStagedPath {
                 path: SePath {
-                    source: "EP".parse().unwrap(),
-                    target: "LX".parse().unwrap(),
+                    source: "PG".parse().unwrap(),
+                    target: "XO".parse().unwrap(),
                     count: ONE,
                     catalysts: SeArcosphereSet::new(),
-                    recipes: Vec::new(),
+                    recipes: vec![SeArcosphereRecipe::PG],
                 },
                 stages: Vec::new(),
             },
         };
 
-        let command = parse_command(&["verify", "EP", "LX"]).expect("success");
+        let command = parse_command(&["verify", "PG -> XO => PG -> XO"]).expect("success");
 
         assert_eq!(expected, command);
     }
@@ -215,8 +144,7 @@ mod tests {
             },
         };
 
-        let command =
-            parse_command(&["verify", "EP", "LX", "x2", "+G", "PG", "->", "XO", "EO", "->", "LG"]).expect("success");
+        let command = parse_command(&["verify", "EP -> LX x2 + G => PG -> XO | EO -> LG"]).expect("success");
 
         assert_eq!(expected, command);
     }

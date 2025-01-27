@@ -263,12 +263,12 @@ where
 
                 let mut results: Vec<_> = results.into_iter().collect();
 
-                let Some(shortest) = results.iter().map(|p| p.path.recipes.len()).min() else {
+                let Some(shortest) = results.iter().map(|p| (p.stages.len(), p.path.recipes.len())).min() else {
                     continue;
                 };
 
                 //  Should longer paths still be made available?
-                results.retain(|p| p.path.recipes.len() == shortest);
+                results.retain(|p| (p.stages.len(), p.path.recipes.len()) == shortest);
 
                 //  Stable output is nice, and definitely not the most costly part anyway...
                 results.sort_unstable();
@@ -772,7 +772,6 @@ mod tests {
 
         let catalysts_pg = "PG".parse().unwrap();
         let catalysts_xo = "XO".parse().unwrap();
-        let catalysts_xt = "XT".parse().unwrap();
 
         let inversion = SeArcosphereRecipe::ELPX;
 
@@ -802,16 +801,6 @@ mod tests {
                     recipes: vec![lo, lt, xz, inversion, lt, et, pg],
                 },
                 stages: vec![1, 2, 3, 5, 6],
-            },
-            StagedPath {
-                path: Path {
-                    source,
-                    target,
-                    count: TWO,
-                    catalysts: catalysts_xt,
-                    recipes: vec![lt, xz, et, lo, lt, inversion, pg],
-                },
-                stages: vec![1, 2, 3, 4, 5, 6],
             },
         ];
 
@@ -859,12 +848,8 @@ mod tests {
         let source = "GO".parse().unwrap();
         let target = "EP".parse().unwrap();
 
-        let catalysts_lt = "LT".parse().unwrap();
         let catalysts_lx = "LX".parse().unwrap();
-        let catalysts_lz = "LZ".parse().unwrap();
         let catalysts_tz = "TZ".parse().unwrap();
-        let catalysts_xt = "XT".parse().unwrap();
-        let catalysts_xz = "XZ".parse().unwrap();
 
         let inversion = SeArcosphereRecipe::GOTZ;
 
@@ -874,16 +859,6 @@ mod tests {
         let xz = SeArcosphereRecipe::XZ;
 
         let expected = vec![
-            StagedPath {
-                path: Path {
-                    source,
-                    target,
-                    count: TWO,
-                    catalysts: catalysts_lt,
-                    recipes: vec![lo, xg, inversion, lt, xz],
-                },
-                stages: vec![1, 2, 4],
-            },
             StagedPath {
                 path: Path {
                     source,
@@ -899,40 +874,10 @@ mod tests {
                     source,
                     target,
                     count: TWO,
-                    catalysts: catalysts_lz,
-                    recipes: vec![lo, inversion, xg, xz, lt],
-                },
-                stages: vec![1, 3, 4],
-            },
-            StagedPath {
-                path: Path {
-                    source,
-                    target,
-                    count: TWO,
-                    catalysts: catalysts_xt,
-                    recipes: vec![xg, inversion, lo, lt, xz],
-                },
-                stages: vec![1, 3, 4],
-            },
-            StagedPath {
-                path: Path {
-                    source,
-                    target,
-                    count: TWO,
                     catalysts: catalysts_tz,
                     recipes: vec![inversion, lo, xg, lt, xz],
                 },
                 stages: vec![1, 3],
-            },
-            StagedPath {
-                path: Path {
-                    source,
-                    target,
-                    count: TWO,
-                    catalysts: catalysts_xz,
-                    recipes: vec![xg, lo, inversion, xz, lt],
-                },
-                stages: vec![1, 2, 4],
             },
         ];
 

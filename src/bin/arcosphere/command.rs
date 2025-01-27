@@ -211,7 +211,7 @@ mod tests {
                     catalysts: "G".parse().unwrap(),
                     recipes: vec![SeArcosphereRecipe::PG, SeArcosphereRecipe::EO],
                 },
-                stages: Vec::new(),
+                stages: vec![1],
             },
         };
 

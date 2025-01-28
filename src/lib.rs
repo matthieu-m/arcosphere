@@ -36,12 +36,14 @@
 
 pub mod executor;
 pub mod model;
+pub mod planner;
 pub mod solver;
 pub mod space_exploration;
 pub mod verifier;
 
 use model::StagedPath;
 
+use planner::{Plan, Planner, PlanningError};
 use solver::{ResolutionError, Solver};
 use space_exploration::{SeArcosphereFamily, SeArcosphereSet};
 use verifier::{VerificationError, Verifier};
@@ -57,4 +59,11 @@ pub fn solve(
 /// Default Space Exploration verify function.
 pub fn verify(path: &StagedPath<SeArcosphereFamily>) -> Result<(), VerificationError<SeArcosphereFamily>> {
     Verifier::new(SeArcosphereFamily).verify(path)
+}
+
+/// Default Space Exploration plan function.
+pub fn plan(
+    path: StagedPath<SeArcosphereFamily>,
+) -> Result<Plan<SeArcosphereFamily>, PlanningError<SeArcosphereFamily>> {
+    Planner::new(SeArcosphereFamily).plan(path)
 }

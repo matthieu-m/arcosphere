@@ -176,7 +176,7 @@ pub trait ArcosphereRecipe:
 }
 
 /// A family of arcospheres.
-pub trait ArcosphereFamily: Copy + fmt::Debug {
+pub trait ArcosphereFamily: Copy + fmt::Debug + Eq + hash::Hash + PartialEq {
     /// The Arcospheres used by the recipes.
     type Arcosphere: Arcosphere;
     /// The type of set of arcospheres used by the recipe.
@@ -1275,15 +1275,11 @@ where
     [(); A::DIMENSION]: Sized,
 {
     /// Removes all the elements of `other` to `self`.
-    ///
-    /// #   Panics
-    ///
-    /// If one of the counts overflows.
     fn sub_assign(&mut self, other: Self) {
         self.spheres
             .iter_mut()
             .zip(&other.spheres)
-            .for_each(|(s, o)| *s = s.strict_sub(*o));
+            .for_each(|(s, o)| *s = s.saturating_sub(*o));
     }
 }
 

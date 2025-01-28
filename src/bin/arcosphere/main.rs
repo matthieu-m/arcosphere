@@ -5,6 +5,8 @@
 //! -   `<arcosphere> solve SOURCE TARGET`.
 //! -   `<arcosphere> verify PATH`.
 //!     where PATH is SOURCE -> TARGET [xCOUNT] [+CATALYSTS] => [IN -> OUT] ((// | '|') [IN -> OUT])*.
+//! -   `<arcosphere> plan PATH`.
+//!     where PATH is SOURCE -> TARGET [xCOUNT] [+CATALYSTS] => [IN -> OUT] ((// | '|') [IN -> OUT])*.
 
 //  Features
 #![feature(generic_const_exprs)]
@@ -26,6 +28,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     match command {
         Command::Solve { source, target } => run_solve(source, target),
         Command::Verify { path } => run_verify(&path),
+        Command::Plan { path } => run_plan(path),
     }
 }
 
@@ -45,6 +48,14 @@ fn run_solve(source: SeArcosphereSet, target: SeArcosphereSet) -> Result<(), Box
 
 fn run_verify(path: &SeStagedPath) -> Result<(), Box<dyn Error>> {
     arcosphere::verify(path)?;
+
+    Ok(())
+}
+
+fn run_plan(path: SeStagedPath) -> Result<(), Box<dyn Error>> {
+    let plan = arcosphere::plan(path)?;
+
+    print!("{plan}");
 
     Ok(())
 }

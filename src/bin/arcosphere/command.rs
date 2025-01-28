@@ -22,6 +22,9 @@ pub enum Command {
     Verify {
         path: SeStagedPath,
     },
+    Plan {
+        path: SeStagedPath,
+    },
 }
 
 impl Command {
@@ -37,7 +40,8 @@ impl Command {
         match subcommand.as_str() {
             "solve" => Self::parse_solve(args),
             "verify" => Self::parse_verify(args),
-            _ => Err(format!("Unknown subcommand {subcommand}, only solve and verify are accepted").into()),
+            "plan" => Self::parse_plan(args),
+            _ => Err(format!("Unknown subcommand {subcommand}, only solve, verify and plan are accepted").into()),
         }
     }
 }
@@ -77,6 +81,19 @@ impl Command {
         let path = path.parse().map_err(|e| format!("Failed to parse PATH: {e}"))?;
 
         Ok(Self::Verify { path })
+    }
+
+    fn parse_plan<I>(mut args: I) -> Result<Self, Box<dyn Error>>
+    where
+        I: Iterator<Item = String>,
+    {
+        let Some(path) = args.next() else {
+            return Err("Specify exactly one argument to plan: PATH".into());
+        };
+
+        let path = path.parse().map_err(|e| format!("Failed to parse PATH: {e}"))?;
+
+        Ok(Self::Plan { path })
     }
 }
 

@@ -14,6 +14,8 @@ A solver for Arcosphere conversion path for Factorio: Space Exploration extensio
 If you do not care for running the calculations yourself, please find the recipe per recipe minimal transformation paths
 in the `etc/` directory.
 
+If you do wish to run the calculations yourself, please check the `Run` section below.
+
 You'll want to read the nomenclature below to understand them.
 
 
@@ -70,3 +72,123 @@ On the other hand, it is possible to go from EP+O to LX+O via folding:
 
 Note that the additional [O]mega arcosphere is returned by the end of the transformation chain. This is an essential
 property of a catalyst: it is not consumed by the transformation.
+
+
+#   Run
+
+You can run the binary with `cargo run [ARGS]`, for example.
+
+The binary has 3 subcommands:
+
+-   `solve`: prints the shortest paths which allow transforming SOURCE into TARGET.
+-   `verify`: verifies that a given path is valid, that is, can actually be executed, or point where the problem is.
+-   `plan`: prints the plan for how to execute a path.
+
+See the sub-sections for more.
+
+
+##  Solve
+
+### Raw solve
+
+By default, the solve subcommand takes two arguments -- SOURCE and TARGET -- each a set of arcospheres, and returns the
+list of paths which transform SOURCE into TARGET, or an error if no such path can be found.
+
+There are options to sort the output, they can be found in the help.
+
+Example, recovering the spheres from one of the output of Macroscale Entanglement Data:
+
+```sh
+$ cargo run solve LGZ LOT
+GLZ -> LOT + P  =>  GP -> OX |  XZ -> PT
+GLZ -> LOT + X  =>  XZ -> PT |  GP -> OX
+```
+
+This outputs two paths, let's focus on the first:
+
+```text
+GLZ -> LOT + P  =>              GP -> OX |  XZ -> PT
+^          ^~~ catalysts        ^        ^  ^~~~~~~~ second recipe to execute
+\~~~~~~~~~ source & target      \        \ stage separator, the first recipe must be executed before the second
+                                 \~~~~~~~ first recipe to execute
+```
+
+The second output is a wee bit more complicated, let's focus on the first recipe, and the elements of the path that
+were not present in the above.
+
+```text
+OTX -> LOT x4 + EG  =>  EO -> GL // GX -> LZ |  GX -> LZ // XZ -> PT |  PZ -> EG |  ET -> OP // GX -> LZ |  PZ -> EG
+           ^                     ^~ parallel separator, the recipes on either side can be executed concurrently
+           \
+            \~ the SOURCE to TARGET transformation can only be executed by transforming x4 the SOURCE into x4 the target
+```
+
+
+### Planning solve
+
+On larger solutions, picking the path to use and laying down the gravimetrics can be a tad challenging. To help, the
+solver subcommand can be passed the `--plan` option (`-p` for short) and output the execution plan for each path.
+
+Coming back to the previous examples:
+
+```sh
+$ cargo run solve -p LGZ LOT
+GLZ -> LOT + P  =>  GP -> OX |  XZ -> PT
+ 1.  [Z] + [GP] + [L] | GP -> OX
+ 2.  [] + [XZ] + [LO] | XZ -> PT
+
+GLZ -> LOT + X  =>  XZ -> PT |  GP -> OX
+ 1.  [G] + [XZ] + [L] | XZ -> PT
+ 2.  [] + [GP] + [LT] | GP -> OX
+```
+
+The paths are printed as before, however below each path its execution plan is also printed. See the `Plan` subcommand
+for an explanation of how to read this plan.
+
+
+##  Verify
+
+The verify subcommand takes one argument: a PATH, in the same format that the solve subcommand returns.
+
+The PATH must be a single argument -- ie, it must be quoted.
+
+
+##  Plan
+
+The plan subcommand takes one argument: a PATH, in the same format that the solve subcommand returns.
+
+The PATH must a single argument -- ie, it must be quoted.
+
+```sh
+$ cargo run plan "GLZ -> LOT + P  =>  GP -> OX |  XZ -> PT"
+ 1.  [Z] + [GP] + [L] | GP -> OX
+ 2.  [] + [XZ] + [LO] | XZ -> PT
+```
+
+The output is _one_ possible serie of stages which allows executing this plan. Each line is composed of:
+
+```text
+ 1.  [Z] + [GP] + [L] | GP -> OX
+ ^   ^     ^      ^   ^ the separator, followed by the recipes of the stage
+  \   \     \      \
+   \   \     \      \ the arcospheres which will no longer be necessary, and can already be returned
+    \   \     \
+     \   \     \  the arcospheres which will be used by this stage
+      \   \
+       \   \ the arcospheres which will be used by later stages
+        \
+         \ the index of the stage
+```
+
+The recipes of any given stage can be executed concurrently, and thus will be separated by `//`.
+
+For example, on a more complex path:
+
+```sh
+$ cargo run plan 'OTX -> LOT x4 + EG  =>  EO -> GL // GX -> LZ |  GX -> LZ // XZ -> PT |  PZ -> EG |  ET -> OP // GX -> LZ |  PZ -> EG'`
+ 1.  [XXX] + [EGOX] + [OOOTTTT] | EO -> GL // GX -> LZ
+ 2.  [X] + [GXXZ] + [LLOOOTTTT] | GX -> LZ // XZ -> PT
+ 3.  [TX] + [PZ] + [LLLOOOTTTT] | PZ -> EG
+ 4.  [] + [EGTX] + [LLLOOOTTTT] | ET -> OP // GX -> LZ
+ 5.  [] + [PZ] + [LLLLOOOOTTTT] | PZ -> EG
+```

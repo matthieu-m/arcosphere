@@ -29,10 +29,12 @@ where
     F: ArcosphereFamily,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        for (desc, stage) in self.stages.iter().zip(self.path.stages()) {
+        for (i, (desc, stage)) in self.stages.iter().zip(self.path.stages()).enumerate() {
+            let i = i + 1;
+
             writeln!(
                 f,
-                "[{}] + [{}] + [{}] | {stage}",
+                "{i:2}.  [{}] + [{}] + [{}] | {stage}",
                 desc.remainder,
                 stage.input(),
                 desc.extracted

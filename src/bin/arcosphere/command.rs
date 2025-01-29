@@ -15,9 +15,12 @@ where
 /// Command passed to the binary.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Command {
+    Help,
     Solve {
         source: SeArcosphereSet,
         target: SeArcosphereSet,
+        plan: bool,
+        sort_by: SortBy,
     },
     Verify {
         path: SeStagedPath,
@@ -35,9 +38,10 @@ impl Command {
     {
         let mut args = args.into_iter();
 
-        let subcommand = args.next().ok_or("Select a subcommand: solve or verify")?;
+        let subcommand = args.next().ok_or("Select a subcommand: solve, verify or plan")?;
 
         match subcommand.as_str() {
+            "-h" | "--help" => Ok(Self::Help),
             "solve" => Self::parse_solve(args),
             "verify" => Self::parse_verify(args),
             "plan" => Self::parse_plan(args),
@@ -46,17 +50,41 @@ impl Command {
     }
 }
 
+/// Plan execution on output of solve subcommand.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum SortBy {
+    /// Sort by number of stages (lowest first).
+    #[default]
+    Stages,
+    /// Sort by number of recipes (lowest first).
+    Recipes,
+}
+
 //
 //  Implementation
 //
 
 impl Command {
-    fn parse_solve<I>(mut args: I) -> Result<Self, Box<dyn Error>>
+    fn parse_solve<I>(args: I) -> Result<Self, Box<dyn Error>>
     where
         I: Iterator<Item = String>,
     {
+        let mut args = args.peekable();
+
+        let mut plan = false;
+        let mut sort_by = SortBy::default();
+
+        while let Some(option) = args.next_if(|arg| arg.starts_with('-')) {
+            match option.as_str() {
+                "-p" | "--plan" => plan = true,
+                "-s" | "--sort-stages" => sort_by = SortBy::Stages,
+                "-r" | "--sort-recipes" => sort_by = SortBy::Recipes,
+                _ => return Err(format!("Unknown option '{option}'").into()),
+            }
+        }
+
         let (Some(source), Some(target), None) = (args.next(), args.next(), args.next()) else {
-            return Err("Specify exactly two arguments to solve: SOURCE and TARGET".into());
+            return Err("Specify exactly two positional arguments to solve: [OPTIONS] SOURCE and TARGET".into());
         };
 
         let source: SeArcosphereSet = source
@@ -67,7 +95,12 @@ impl Command {
             .parse()
             .map_err(|e| format!("Failed to parse TARGET {target}: {e}"))?;
 
-        Ok(Self::Solve { source, target })
+        Ok(Self::Solve {
+            source,
+            target,
+            plan,
+            sort_by,
+        })
     }
 
     fn parse_verify<I>(mut args: I) -> Result<Self, Box<dyn Error>>
@@ -119,6 +152,8 @@ mod tests {
         let expected = Command::Solve {
             source: "EP".parse().unwrap(),
             target: "LX".parse().unwrap(),
+            plan: false,
+            sort_by: SortBy::Stages,
         };
 
         let command = parse_command(&["solve", "EP", "LX"]).expect("success");

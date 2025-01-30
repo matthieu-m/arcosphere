@@ -1,6 +1,11 @@
 //! Core solving logic, with modular setup.
 
-use core::{cmp::Reverse, error, fmt, num::NonZeroU8, ops::Range};
+use core::{
+    cmp::{self, Reverse},
+    error, fmt,
+    num::NonZeroU8,
+    ops::Range,
+};
 
 use fxhash::{FxHashMap, FxHashSet};
 
@@ -15,12 +20,10 @@ use crate::{
 pub enum ResolutionError {
     /// There is no solution, as the number of arcospheres is not preserved.
     PreservationError,
-    /// There is no solution for the provided set of inversions.
-    NotWithInversions,
     /// There is no solution for the given range of number of catalysts.
     OutsideCatalysts,
-    /// There is no solution for the given range of number of inversions.
-    OutsideInversions,
+    /// There is no solution for the given range of number of repetitions.
+    OutsideCount,
     /// There is no solution for the given range of number of recipes.
     OutsideRecipes,
 }
@@ -31,7 +34,7 @@ impl ResolutionError {
     /// An error is definitive if the supplied recipes simply do not permit solving the problem, while it is not if
     /// there exists a possibility, however remote, that increasing the search space would allow finding a solution.
     pub fn is_definitive(&self) -> bool {
-        matches!(self, Self::PreservationError | Self::NotWithInversions)
+        *self == Self::PreservationError
     }
 }
 
@@ -50,6 +53,8 @@ pub struct SolverConfiguration {
     pub maximum_catalysts: u8,
     /// The minimum number of catalysts to add.
     pub minimum_catalysts: u8,
+    /// The maximum number of extra catalysts explored after first finding a solution.
+    pub extra_catalysts: u8,
     /// The maximum number of repetitions allowed.
     pub maximum_repetitions: u8,
     /// The maximum number of recipes in the path from source to target.
@@ -59,14 +64,16 @@ pub struct SolverConfiguration {
 impl Default for SolverConfiguration {
     fn default() -> Self {
         //  Sufficient for all SE recipes.
-        let maximum_catalysts = 2;
+        let maximum_catalysts = 4;
         let minimum_catalysts = 0;
+        let extra_catalysts = 1;
         let maximum_repetitions = 4;
         let maximum_recipes = 20;
 
         Self {
             maximum_catalysts,
             minimum_catalysts,
+            extra_catalysts,
             maximum_repetitions,
             maximum_recipes,
         }
@@ -202,7 +209,7 @@ where
 
         //  Is an inversion required, or not?
 
-        self.solve_impl(source, target)
+        self.explore_catalysts_space(source, target)
     }
 }
 
@@ -232,54 +239,91 @@ where
     F: ArcosphereFamily<Arcosphere: Send, Set: Send, Recipe: Send> + Send,
     E: Executor,
 {
-    fn solve_impl(&self, source: F::Set, target: F::Set) -> Result<Vec<StagedPath<F>>, ResolutionError> {
+    fn explore_catalysts_space(&self, source: F::Set, target: F::Set) -> Result<Vec<StagedPath<F>>, ResolutionError> {
         let catalysts = self.configuration.catalysts();
-        let configuration = self.configuration.into();
 
+        let mut maximum_catalysts = catalysts.end - 1;
+
+        let mut results = FxHashSet::default();
         let mut last_error = None;
 
         for i in catalysts {
-            let repetitions = self.configuration.repetitions();
-
-            for count in repetitions {
-                let Some(count) = NonZeroU8::new(count) else {
-                    continue;
-                };
-
-                let searchers = Searcher::generate_searchers(self.family, source, target, count, i, configuration);
-
-                let tasks: Vec<_> = searchers.into_iter().map(|searcher| move || searcher.solve()).collect();
-
-                let mut results = FxHashSet::default();
-
-                for result in self.executor.execute(tasks) {
-                    match result {
-                        Ok(paths) => results.extend(paths),
-                        Err(e) if e.is_definitive() => return Err(e),
-                        Err(e) if e == ResolutionError::OutsideRecipes => last_error = Some(e),
-                        _ => (),
-                    }
-                }
-
-                let mut results: Vec<_> = results.into_iter().collect();
-
-                let Some(shortest) = results.iter().map(|p| (p.stages.len(), p.path.recipes.len())).min() else {
-                    continue;
-                };
-
-                //  Should longer paths still be made available?
-                results.retain(|p| (p.stages.len(), p.path.recipes.len()) == shortest);
-
-                //  Stable output is nice, and definitely not the most costly part anyway...
-                results.sort_unstable();
-
-                return Ok(results);
+            if i > maximum_catalysts {
+                break;
             }
+
+            let result = self.explore_count_space(i, source, target);
+
+            match result {
+                Ok(paths) => results.extend(paths),
+                Err(e) if e.is_definitive() => return Err(e),
+                Err(e) if e == ResolutionError::OutsideCount => last_error = Some(e),
+                _ => (),
+            }
+
+            if !results.is_empty() {
+                maximum_catalysts = cmp::min(maximum_catalysts, i + self.configuration.extra_catalysts as usize);
+            }
+        }
+
+        let mut results: Vec<_> = results.into_iter().collect();
+
+        let Some(shortest) = results.iter().map(|p| (p.stages.len(), p.path.recipes.len())).min() else {
+            //  Didn't find anything, it may be necessary to raise the number of catalysts or the number of recipes in a
+            //  path.
+            return Err(last_error.unwrap_or(ResolutionError::OutsideCatalysts));
+        };
+
+        //  Should longer paths still be made available?
+        results.retain(|p| (p.stages.len(), p.path.recipes.len()) == shortest);
+
+        //  Stable output is nice, and definitely not the most costly part anyway...
+        results.sort_unstable();
+
+        Ok(results)
+    }
+
+    fn explore_count_space(
+        &self,
+        catalysts: usize,
+        source: F::Set,
+        target: F::Set,
+    ) -> Result<FxHashSet<StagedPath<F>>, ResolutionError> {
+        let configuration = self.configuration.into();
+        let repetitions = self.configuration.repetitions();
+
+        let mut last_error = None;
+
+        for count in repetitions {
+            let Some(count) = NonZeroU8::new(count) else {
+                continue;
+            };
+
+            let searchers = Searcher::generate_searchers(self.family, source, target, count, catalysts, configuration);
+
+            let tasks: Vec<_> = searchers.into_iter().map(|searcher| move || searcher.solve()).collect();
+
+            let mut results = FxHashSet::default();
+
+            for result in self.executor.execute(tasks) {
+                match result {
+                    Ok(paths) => results.extend(paths),
+                    Err(e) if e.is_definitive() => return Err(e),
+                    Err(e) if e == ResolutionError::OutsideRecipes => last_error = Some(e),
+                    _ => (),
+                }
+            }
+
+            if results.is_empty() {
+                continue;
+            }
+
+            return Ok(results);
         }
 
         //  Didn't find anything, it may be necessary to raise the number of catalysts or the number of recipes in a
         //  path.
-        Err(last_error.unwrap_or(ResolutionError::OutsideCatalysts))
+        Err(last_error.unwrap_or(ResolutionError::OutsideCount))
     }
 }
 
@@ -732,35 +776,66 @@ mod tests {
     fn solve_space_folding_data_a() {
         let source = "EP".parse().unwrap();
         let target = "LX".parse().unwrap();
-        let catalysts_g = "G".parse().unwrap();
-        let catalysts_o = "O".parse().unwrap();
 
-        let expected = vec![
-            StagedPath {
-                path: Path {
-                    source,
-                    target,
-                    count: ONE,
-                    catalysts: catalysts_g,
-                    recipes: vec![SeArcosphereRecipe::PG, SeArcosphereRecipe::EO],
+        //  Without extra catalysts.
+        {
+            let no_extra_catalysts = SolverConfiguration {
+                extra_catalysts: 0,
+                ..Default::default()
+            };
+
+            let catalysts_g = "G".parse().unwrap();
+            let catalysts_o = "O".parse().unwrap();
+
+            let expected = vec![
+                StagedPath {
+                    path: Path {
+                        source,
+                        target,
+                        count: ONE,
+                        catalysts: catalysts_g,
+                        recipes: vec![SeArcosphereRecipe::PG, SeArcosphereRecipe::EO],
+                    },
+                    stages: vec![1],
                 },
-                stages: vec![1],
-            },
-            StagedPath {
-                path: Path {
-                    source,
-                    target,
-                    count: ONE,
-                    catalysts: catalysts_o,
-                    recipes: vec![SeArcosphereRecipe::EO, SeArcosphereRecipe::PG],
+                StagedPath {
+                    path: Path {
+                        source,
+                        target,
+                        count: ONE,
+                        catalysts: catalysts_o,
+                        recipes: vec![SeArcosphereRecipe::EO, SeArcosphereRecipe::PG],
+                    },
+                    stages: vec![1],
                 },
-                stages: vec![1],
-            },
-        ];
+            ];
 
-        let paths = solve(source, target);
+            let paths = solve_with(source, target, no_extra_catalysts);
 
-        assert_eq!(expected, paths);
+            assert_eq!(expected, paths);
+        }
+
+        //  With extra catalysts.
+        {
+            let catalysts_go = "GO".parse().unwrap();
+
+            let expected = vec![
+                StagedPath {
+                    path: Path {
+                        source,
+                        target,
+                        count: ONE,
+                        catalysts: catalysts_go,
+                        recipes: vec![SeArcosphereRecipe::EO, SeArcosphereRecipe::PG],
+                    },
+                    stages: vec![],
+                },
+            ];
+
+            let paths = solve(source, target);
+
+            assert_eq!(expected, paths);
+        }
     }
 
     #[test]
@@ -816,29 +891,64 @@ mod tests {
         let source = "ZZ".parse().unwrap();
         let target = "GT".parse().unwrap();
 
-        let catalysts = "X".parse().unwrap();
+        //  Without extra catalysts.
+        {
+            let no_extra_catalysts = SolverConfiguration {
+                extra_catalysts: 0,
+                ..Default::default()
+            };
 
-        let xz = SeArcosphereRecipe::XZ;
-        let pz = SeArcosphereRecipe::PZ;
-        let et = SeArcosphereRecipe::ET;
-        let pg = SeArcosphereRecipe::PG;
-        let eo = SeArcosphereRecipe::EO;
-        let lo = SeArcosphereRecipe::LO;
+            let catalysts = "X".parse().unwrap();
 
-        let expected = vec![StagedPath {
-            path: Path {
-                source,
-                target,
-                count: TWO,
-                catalysts,
-                recipes: vec![xz, pz, et, pg, xz, pz, eo, lo],
-            },
-            stages: vec![1, 2, 3, 4, 5, 6, 7],
-        }];
+            let xz = SeArcosphereRecipe::XZ;
+            let pz = SeArcosphereRecipe::PZ;
+            let et = SeArcosphereRecipe::ET;
+            let pg = SeArcosphereRecipe::PG;
+            let eo = SeArcosphereRecipe::EO;
+            let lo = SeArcosphereRecipe::LO;
 
-        let paths = solve(source, target);
+            let expected = vec![StagedPath {
+                path: Path {
+                    source,
+                    target,
+                    count: TWO,
+                    catalysts,
+                    recipes: vec![xz, pz, et, pg, xz, pz, eo, lo],
+                },
+                stages: vec![1, 2, 3, 4, 5, 6, 7],
+            }];
 
-        assert_eq!(expected, paths);
+            let paths = solve_with(source, target, no_extra_catalysts);
+
+            assert_eq!(expected, paths);
+        }
+
+        //  With extra catalysts.
+        {
+            let catalysts = "PX".parse().unwrap();
+
+            let xz = SeArcosphereRecipe::XZ;
+            let pz = SeArcosphereRecipe::PZ;
+            let et = SeArcosphereRecipe::ET;
+            let pg = SeArcosphereRecipe::PG;
+            let eo = SeArcosphereRecipe::EO;
+            let lo = SeArcosphereRecipe::LO;
+
+            let expected = vec![StagedPath {
+                path: Path {
+                    source,
+                    target,
+                    count: TWO,
+                    catalysts,
+                    recipes: vec![pz, xz, et, pz, eo, pg, lo, xz],
+                },
+                stages: vec![2, 4, 6],
+            }];
+
+            let paths = solve(source, target);
+
+            assert_eq!(expected, paths);
+        }
     }
 
     #[test]
@@ -887,7 +997,16 @@ mod tests {
     }
 
     fn solve(source: SeArcosphereSet, target: SeArcosphereSet) -> Vec<SeStagedPath> {
+        solve_with(source, target, Default::default())
+    }
+
+    fn solve_with(
+        source: SeArcosphereSet,
+        target: SeArcosphereSet,
+        configuration: SolverConfiguration,
+    ) -> Vec<SeStagedPath> {
         SeSolver::<DefaultExecutor>::default()
+            .with_configuration(SolverConfiguration { maximum_catalysts: 2, ..configuration })
             .solve(source, target)
             .expect("success")
     }
